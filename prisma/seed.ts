@@ -1,6 +1,17 @@
 import { PrismaClient } from "@prisma/client";
+import { PrismaPg } from "@prisma/adapter-pg";
 
-const prisma = new PrismaClient();
+const connectionString = process.env.DATABASE_URL;
+
+if (!connectionString) {
+  throw new Error("DATABASE_URL is required");
+}
+
+const adapter = new PrismaPg({ connectionString });
+const prisma = new PrismaClient({ adapter });
+
+const sampleClientNames = ["Associação do Vale", "Liga Norte"];
+const sampleClientTokens = ["vale-1001", "norte-2002"];
 
 const blocks = [
   {
@@ -155,33 +166,21 @@ const blocks = [
 ];
 
 async function main() {
+  await prisma.resposta.deleteMany();
+  await prisma.pergunta.deleteMany();
+  await prisma.bloco.deleteMany();
+  await prisma.cliente.deleteMany({
+    where: {
+      OR: [
+        { nome: { in: sampleClientNames } },
+        { token: { in: sampleClientTokens } },
+      ],
+    },
+  });
+
+  const insertedCounts: Record<string, number> = {};
+
   for (const blockData of blocks) {
-    const existingBlock = await prisma.bloco.findFirst({ where: { titulo: blockData.titulo } });
-
-    if (existingBlock) {
-      for (const question of blockData.perguntas) {
-        const existingQuestion = await prisma.pergunta.findFirst({
-          where: { blocoId: existingBlock.id, texto: question.texto },
-        });
-
-        if (!existingQuestion) {
-          await prisma.pergunta.create({
-            data: {
-              blocoId: existingBlock.id,
-              texto: question.texto,
-              tipo: question.tipo as any,
-              obrigatoria: question.obrigatoria,
-              ordem: question.ordem,
-              repetivel: question.repetivel,
-              opcoes: question.opcoes,
-            },
-          });
-        }
-      }
-
-      continue;
-    }
-
     const bloco = await prisma.bloco.create({
       data: {
         titulo: blockData.titulo,
@@ -200,7 +199,13 @@ async function main() {
       },
     });
 
-    console.log(`Seeded bloco: ${bloco.titulo}`);
+    insertedCounts[blockData.titulo] = blockData.perguntas.length;
+    console.log(`Seeded bloco: ${bloco.titulo} (${blockData.perguntas.length} perguntas)`);
+  }
+
+  console.log("\nResumo do seed:");
+  for (const [titulo, count] of Object.entries(insertedCounts)) {
+    console.log(`- ${titulo}: ${count} perguntas`);
   }
 }
 

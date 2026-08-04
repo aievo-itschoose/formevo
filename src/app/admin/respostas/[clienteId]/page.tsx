@@ -1,31 +1,6 @@
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import Link from "next/link";
-import type { ClientRecord } from "@/types/form";
-
-const clients: ClientRecord[] = [
-  {
-    id: "cliente-1",
-    nome: "Associação do Vale",
-    token: "vale-1001",
-    plano: "SCALE",
-    temIntegracao: true,
-    sistemaIntegracao: "Power",
-    skillsAtivas: ["COMERCIAL", "SAC"],
-    status: "EM_ANDAMENTO",
-    criadoEm: "2026-08-01T10:00:00.000Z",
-  },
-  {
-    id: "cliente-2",
-    nome: "Liga Norte",
-    token: "norte-2002",
-    plano: "TEAM",
-    temIntegracao: false,
-    skillsAtivas: ["COBRANCA", "REATIVACAO", "INDICACAO"],
-    status: "NAO_INICIADO",
-    criadoEm: "2026-08-02T14:00:00.000Z",
-  },
-];
 
 const responses = [
   {
@@ -53,9 +28,8 @@ export default async function ClienteResponsesPage({ params }: { params: Promise
   }
 
   const { clienteId } = await params;
-  const cliente = clients.find((item) => item.id === clienteId);
 
-  if (!cliente) {
+  if (!clienteId) {
     return <div className="p-8 text-white">Cliente não encontrado.</div>;
   }
 
@@ -66,7 +40,7 @@ export default async function ClienteResponsesPage({ params }: { params: Promise
           <div className="flex flex-wrap items-center justify-between gap-3">
             <div>
               <p className="text-sm uppercase tracking-[0.3em] text-[#a65df9]">Respostas</p>
-              <h1 className="text-2xl font-semibold text-white">{cliente.nome}</h1>
+              <h1 className="text-2xl font-semibold text-white">Cliente {clienteId}</h1>
             </div>
             <Link href="/admin/respostas" className="rounded-full border border-white/10 px-3 py-2 text-sm text-zinc-300">Voltar à lista</Link>
           </div>

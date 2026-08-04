@@ -128,29 +128,7 @@ export const initialBlocks: Block[] = [
   },
 ];
 
-export const initialClients: ClientRecord[] = [
-  {
-    id: "cliente-1",
-    nome: "Associação do Vale",
-    token: "vale-1001",
-    plano: "SCALE",
-    temIntegracao: true,
-    sistemaIntegracao: "Power",
-    skillsAtivas: ["COMERCIAL", "SAC"],
-    status: "EM_ANDAMENTO",
-    criadoEm: "2026-08-01T10:00:00.000Z",
-  },
-  {
-    id: "cliente-2",
-    nome: "Liga Norte",
-    token: "norte-2002",
-    plano: "TEAM",
-    temIntegracao: false,
-    skillsAtivas: ["COBRANCA", "REATIVACAO", "INDICACAO"],
-    status: "NAO_INICIADO",
-    criadoEm: "2026-08-02T14:00:00.000Z",
-  },
-];
+export const initialClients: ClientRecord[] = [];
 
 export function getVisibleBlocks(blocks: Block[], skillsAtivas: Skill[]) {
   return blocks.filter((block) => !block.skillVinculada || skillsAtivas.includes(block.skillVinculada));
