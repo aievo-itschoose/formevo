@@ -152,7 +152,7 @@ const blocks = [
       { texto: "Receios ou pontos de atenção antes de começar", tipo: "TEXTO_LONGO", obrigatoria: false, ordem: 2, repetivel: false, opcoes: [] },
     ],
   },
-] as const;
+];
 
 async function main() {
   for (const blockData of blocks) {
