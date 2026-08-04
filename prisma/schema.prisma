@@ -1,0 +1,74 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model Cliente {
+  id                String            @id @default(cuid())
+  nome              String
+  token             String            @unique
+  plano             Plano
+  temIntegracao     Boolean           @default(false)
+  sistemaIntegracao String?
+  skillsAtivas      String[]
+  status            StatusImplantacao @default(NAO_INICIADO)
+  criadoEm          DateTime          @default(now())
+  respostas         Resposta[]
+}
+
+enum Plano {
+  FLOW
+  SCALE
+  TEAM
+}
+
+enum StatusImplantacao {
+  NAO_INICIADO
+  EM_ANDAMENTO
+  CONCLUIDO
+}
+
+model Bloco {
+  id             String     @id @default(cuid())
+  titulo         String
+  ordem          Int
+  skillVinculada String?
+  perguntas      Pergunta[]
+}
+
+model Pergunta {
+  id          String       @id @default(cuid())
+  blocoId     String
+  bloco       Bloco        @relation(fields: [blocoId], references: [id])
+  texto       String
+  tipo        TipoPergunta
+  obrigatoria Boolean      @default(true)
+  ordem       Int
+  repetivel   Boolean      @default(false)
+  opcoes      String[]
+  respostas   Resposta[]
+}
+
+enum TipoPergunta {
+  TEXTO_CURTO
+  TEXTO_LONGO
+  SELECT
+  MULTISELECT
+  ARQUIVO
+  SIM_NAO
+}
+
+model Resposta {
+  id             String   @id @default(cuid())
+  clienteId      String
+  cliente        Cliente  @relation(fields: [clienteId], references: [id])
+  perguntaId     String
+  pergunta       Pergunta @relation(fields: [perguntaId], references: [id])
+  valor          String   @db.Text
+  grupoRepeticao Int?
+  criadoEm       DateTime @default(now())
+}

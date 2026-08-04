@@ -1,0 +1,289 @@
+"use client";
+
+import { useEffect, useMemo, useState } from "react";
+import Link from "next/link";
+import { DndContext, PointerSensor, closestCenter, useSensor, useSensors, type DragEndEvent } from "@dnd-kit/core";
+import { SortableContext, arrayMove, useSortable, verticalListSortingStrategy } from "@dnd-kit/sortable";
+import { CSS } from "@dnd-kit/utilities";
+import { Trash2 } from "lucide-react";
+import { toast } from "sonner";
+import { initialBlocks, initialClients, planLabels, skillLabels } from "@/lib/mock-data";
+import type { Block, ClientRecord, Plano, Skill, StatusImplantacao } from "@/types/form";
+
+interface AdminPanelProps {
+  view: "perguntas" | "clientes" | "respostas";
+}
+
+function SortableBlockCard({ block, onEditQuestion, onAddQuestion, onDeleteQuestion }: { block: Block; onEditQuestion: (blockId: string, questionId: string, field: "texto" | "tipo", value: string) => void; onAddQuestion: (blockId: string) => void; onDeleteQuestion: (blockId: string, questionId: string) => void }) {
+  const { attributes, listeners, setNodeRef, transform, transition } = useSortable({ id: block.id });
+  const style = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+  };
+
+  return (
+    <div ref={setNodeRef} style={style} className="rounded-2xl border border-white/10 bg-[#111118] p-4">
+      <div className="mb-3 flex items-center justify-between">
+        <div className="flex items-center gap-2">
+          <button type="button" className="cursor-grab text-zinc-500" {...attributes} {...listeners}>⋮⋮</button>
+          <h3 className="text-lg font-semibold text-white">{block.titulo}</h3>
+        </div>
+        <button type="button" onClick={() => onAddQuestion(block.id)} className="rounded-full border border-[#7d4af9]/30 px-3 py-1 text-sm text-[#a65df9]">Adicionar pergunta</button>
+      </div>
+      <div className="space-y-2">
+        {block.perguntas.map((question, index) => (
+          <div key={question.id} className="rounded-xl border border-white/10 bg-[#0a0a0f] p-3">
+            <div className="mb-2 flex items-center justify-between">
+              <p className="text-sm text-zinc-400">{index + 1}. {question.texto || "Nova pergunta"}</p>
+              <div className="flex items-center gap-2">
+                <span className="text-xs uppercase tracking-[0.25em] text-zinc-500">{question.tipo}</span>
+                <button type="button" onClick={() => onDeleteQuestion(block.id, question.id)} className="rounded-full border border-red-500/30 p-2 text-red-300 transition hover:bg-red-500/10" aria-label="Excluir pergunta">
+                  <Trash2 size={14} />
+                </button>
+              </div>
+            </div>
+            <input
+              value={question.texto}
+              onChange={(event) => onEditQuestion(block.id, question.id, "texto", event.target.value)}
+              className="w-full rounded-lg border border-white/10 bg-[#111118] px-3 py-2 text-sm text-white"
+              placeholder="Digite a pergunta"
+            />
+            <select
+              value={question.tipo}
+              onChange={(event) => onEditQuestion(block.id, question.id, "tipo", event.target.value)}
+              className="mt-2 w-full rounded-lg border border-white/10 bg-[#111118] px-3 py-2 text-sm text-white"
+            >
+              <option value="TEXTO_CURTO">Texto curto</option>
+              <option value="TEXTO_LONGO">Texto longo</option>
+              <option value="SELECT">Select</option>
+              <option value="MULTISELECT">Multiselect</option>
+              <option value="ARQUIVO">Arquivo</option>
+              <option value="SIM_NAO">Sim/Não</option>
+            </select>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+export function AdminPanel({ view }: AdminPanelProps) {
+  const [blocks, setBlocks] = useState<Block[]>([]);
+  const [clients, setClients] = useState<ClientRecord[]>([]);
+  const [selectedClientId, setSelectedClientId] = useState<string | null>(null);
+  const [clientName, setClientName] = useState("");
+  const [clientPlan, setClientPlan] = useState<Plano>("SCALE");
+  const [clientSkills, setClientSkills] = useState<Skill[]>(["COMERCIAL"]);
+  const [pendingDelete, setPendingDelete] = useState<{ blockId: string; questionId: string } | null>(null);
+
+  useEffect(() => {
+    const storedBlocks = window.localStorage.getItem("form-evo-blocks");
+    const storedClients = window.localStorage.getItem("form-evo-clients");
+    const nextBlocks = storedBlocks ? JSON.parse(storedBlocks) as Block[] : initialBlocks;
+    const nextClients = storedClients ? JSON.parse(storedClients) as ClientRecord[] : initialClients;
+    setBlocks(nextBlocks);
+    setClients(nextClients);
+    setSelectedClientId(nextClients[0]?.id ?? null);
+  }, []);
+
+  useEffect(() => {
+    if (blocks.length) window.localStorage.setItem("form-evo-blocks", JSON.stringify(blocks));
+  }, [blocks]);
+
+  useEffect(() => {
+    if (clients.length) window.localStorage.setItem("form-evo-clients", JSON.stringify(clients));
+  }, [clients]);
+
+  const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 8 } }));
+
+  const handleDragEnd = (event: DragEndEvent) => {
+    const { active, over } = event;
+    if (!over || active.id === over.id) return;
+    setBlocks((items) => {
+      const oldIndex = items.findIndex((item) => item.id === active.id);
+      const newIndex = items.findIndex((item) => item.id === over.id);
+      return arrayMove(items, oldIndex, newIndex);
+    });
+    toast.success("Blocos reordenados.");
+  };
+
+  const addQuestion = (blockId: string) => {
+    setBlocks((items) => items.map((block) => block.id === blockId ? { ...block, perguntas: [...block.perguntas, { id: `q-${crypto.randomUUID()}`, blocoId: block.id, texto: "Nova pergunta", tipo: "TEXTO_CURTO", obrigatoria: true, ordem: block.perguntas.length + 1, repetivel: false, opcoes: [] }] } : block));
+    toast.success("Pergunta adicionada.");
+  };
+
+  const editQuestion = (blockId: string, questionId: string, field: "texto" | "tipo", value: string) => {
+    setBlocks((items) => items.map((block) => block.id === blockId ? { ...block, perguntas: block.perguntas.map((question) => question.id === questionId ? { ...question, [field]: value } : question) } : block));
+  };
+
+  const deleteQuestion = (blockId: string, questionId: string) => {
+    setPendingDelete({ blockId, questionId });
+  };
+
+  const confirmDeleteQuestion = async () => {
+    if (!pendingDelete) return;
+
+    try {
+      const response = await fetch(`/api/perguntas/${pendingDelete.questionId}`, { method: "DELETE" });
+      if (!response.ok) {
+        throw new Error("Falha ao excluir");
+      }
+
+      setBlocks((items) => items.map((block) => block.id === pendingDelete.blockId ? { ...block, perguntas: block.perguntas.filter((question) => question.id !== pendingDelete.questionId) } : block));
+      toast.success("Pergunta removida.");
+    } catch {
+      toast.error("Não foi possível remover a pergunta.");
+    } finally {
+      setPendingDelete(null);
+    }
+  };
+
+  const createClient = () => {
+    if (!clientName.trim()) return;
+    const token = `${clientName.toLowerCase().replace(/[^a-z0-9]+/g, "-")}-${Date.now().toString().slice(-4)}`;
+    const newClient: ClientRecord = {
+      id: `cliente-${Date.now()}`,
+      nome: clientName.trim(),
+      token,
+      plano: clientPlan,
+      temIntegracao: false,
+      skillsAtivas: clientSkills,
+      status: "NAO_INICIADO",
+      criadoEm: new Date().toISOString(),
+    };
+    setClients((items) => [newClient, ...items]);
+    setSelectedClientId(newClient.id);
+    setClientName("");
+    toast.success(`Cliente criado. Link: /implantacao/${token}`);
+  };
+
+  const updateClientStatus = (clientId: string, status: StatusImplantacao) => {
+    setClients((items) => items.map((client) => client.id === clientId ? { ...client, status } : client));
+  };
+
+  const selectedClient = useMemo(() => clients.find((client) => client.id === selectedClientId) ?? null, [clients, selectedClientId]);
+
+  return (
+    <div className="space-y-6">
+      <div className="rounded-2xl border border-white/10 bg-[#111118] p-6">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div>
+            <h2 className="text-2xl font-semibold text-white">Painel de implantação</h2>
+            <p className="mt-2 text-sm text-zinc-400">Gerencie perguntas, organize blocos e crie links únicos para cada cliente.</p>
+          </div>
+          <div className="flex flex-wrap gap-2">
+            <Link href="/admin/perguntas" className="rounded-full border border-white/10 px-3 py-2 text-sm text-zinc-300">Perguntas</Link>
+            <Link href="/admin/clientes" className="rounded-full border border-white/10 px-3 py-2 text-sm text-zinc-300">Clientes</Link>
+            <Link href="/admin/respostas" className="rounded-full border border-[#7d4af9]/30 bg-[#7d4af9]/10 px-3 py-2 text-sm text-[#a65df9]">Respostas</Link>
+          </div>
+        </div>
+      </div>
+
+      {view === "perguntas" && (
+        <div className="space-y-4">
+          <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
+            <SortableContext items={blocks.map((block) => block.id)} strategy={verticalListSortingStrategy}>
+              {blocks.map((block) => <SortableBlockCard key={block.id} block={block} onEditQuestion={editQuestion} onAddQuestion={addQuestion} onDeleteQuestion={deleteQuestion} />)}
+            </SortableContext>
+          </DndContext>
+        </div>
+      )}
+
+      {view === "clientes" && (
+        <div className="grid gap-6 lg:grid-cols-[1.1fr_0.9fr]">
+          <div className="rounded-2xl border border-white/10 bg-[#111118] p-6">
+            <h3 className="text-xl font-semibold text-white">Criar novo cliente</h3>
+            <div className="mt-4 space-y-3">
+              <input value={clientName} onChange={(event) => setClientName(event.target.value)} placeholder="Nome da associação" className="w-full rounded-xl border border-white/10 bg-[#0a0a0f] px-3 py-2 text-white" />
+              <select value={clientPlan} onChange={(event) => setClientPlan(event.target.value as Plano)} className="w-full rounded-xl border border-white/10 bg-[#0a0a0f] px-3 py-2 text-white">
+                <option value="FLOW">Flow</option>
+                <option value="SCALE">Scale</option>
+                <option value="TEAM">Team</option>
+              </select>
+              <div className="flex flex-wrap gap-2">
+                {Object.entries(skillLabels).map(([value, label]) => {
+                  const skillValue = value as Skill;
+                  const checked = clientSkills.includes(skillValue);
+                  return (
+                    <label key={value} className={`rounded-full border px-3 py-2 text-sm ${checked ? "border-[#7d4af9] bg-[#7d4af9]/20 text-white" : "border-white/10 bg-[#0a0a0f] text-zinc-400"}`}>
+                      <input type="checkbox" className="mr-2" checked={checked} onChange={() => setClientSkills((items) => items.includes(skillValue) ? items.filter((item) => item !== skillValue) : [...items, skillValue])} />
+                      {label}
+                    </label>
+                  );
+                })}
+              </div>
+              <button type="button" onClick={createClient} className="rounded-full bg-[#7d4af9] px-4 py-2 font-medium text-white">Criar implantação</button>
+            </div>
+          </div>
+
+          <div className="rounded-2xl border border-white/10 bg-[#111118] p-6">
+            <h3 className="text-xl font-semibold text-white">Implantações</h3>
+            <div className="mt-4 space-y-3">
+              {clients.map((client) => (
+                <button key={client.id} type="button" onClick={() => setSelectedClientId(client.id)} className={`w-full rounded-2xl border p-4 text-left ${selectedClientId === client.id ? "border-[#7d4af9] bg-[#7d4af9]/10" : "border-white/10 bg-[#0a0a0f]"}`}>
+                  <div className="flex items-center justify-between">
+                    <span className="font-semibold text-white">{client.nome}</span>
+                    <span className="text-xs uppercase tracking-[0.25em] text-zinc-500">{client.status}</span>
+                  </div>
+                  <p className="mt-2 text-sm text-zinc-400">{client.plano} • {client.skillsAtivas.join(", ")}</p>
+                  <p className="mt-2 text-xs text-zinc-500">/implantacao/{client.token}</p>
+                </button>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {pendingDelete && (
+        <div className="rounded-2xl border border-red-500/30 bg-red-500/10 p-4 text-sm text-red-200">
+          <p className="font-medium">Tem certeza que deseja excluir esta pergunta?</p>
+          <div className="mt-3 flex gap-2">
+            <button type="button" onClick={confirmDeleteQuestion} className="rounded-full bg-red-500 px-3 py-2 text-white">Excluir</button>
+            <button type="button" onClick={() => setPendingDelete(null)} className="rounded-full border border-white/10 px-3 py-2 text-zinc-300">Cancelar</button>
+          </div>
+        </div>
+      )}
+
+      {view === "respostas" && (
+        <div className="grid gap-6 lg:grid-cols-[0.9fr_1.1fr]">
+          <div className="rounded-2xl border border-white/10 bg-[#111118] p-6">
+            <h3 className="text-xl font-semibold text-white">Resumo das implantações</h3>
+            <div className="mt-4 space-y-3">
+              {clients.map((client) => (
+                <div key={client.id} className="rounded-2xl border border-white/10 bg-[#0a0a0f] p-4">
+                  <div className="flex items-center justify-between">
+                    <span className="font-semibold text-white">{client.nome}</span>
+                    <span className="text-xs uppercase tracking-[0.25em] text-zinc-500">{client.status}</span>
+                  </div>
+                  <p className="mt-2 text-sm text-zinc-400">Plano: {planLabels[client.plano]}</p>
+                  <div className="mt-3 flex gap-2">
+                    <button type="button" onClick={() => updateClientStatus(client.id, "EM_ANDAMENTO")} className="rounded-full border border-white/10 px-3 py-1 text-sm text-zinc-300">Em andamento</button>
+                    <button type="button" onClick={() => updateClientStatus(client.id, "CONCLUIDO")} className="rounded-full border border-[#7d4af9]/30 px-3 py-1 text-sm text-[#a65df9]">Concluir</button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          <div className="rounded-2xl border border-white/10 bg-[#111118] p-6">
+            <h3 className="text-xl font-semibold text-white">Detalhes</h3>
+            {selectedClient ? (
+              <div className="mt-4 space-y-3 text-sm text-zinc-400">
+                <p><span className="font-semibold text-white">Cliente:</span> {selectedClient.nome}</p>
+                <p><span className="font-semibold text-white">Token:</span> {selectedClient.token}</p>
+                <p><span className="font-semibold text-white">Plano:</span> {planLabels[selectedClient.plano]}</p>
+                <p><span className="font-semibold text-white">Skills:</span> {selectedClient.skillsAtivas.join(", ")}</p>
+                <div className="rounded-2xl border border-white/10 bg-[#0a0a0f] p-4">
+                  <p className="text-white">Resposta agrupada por bloco</p>
+                  <p className="mt-2">Identidade e tom • Planos e produtos • Limites e transferência para humano</p>
+                </div>
+              </div>
+            ) : (
+              <p className="mt-4 text-zinc-400">Selecione uma implantação para ver os detalhes.</p>
+            )}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
