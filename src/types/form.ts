@@ -18,6 +18,7 @@ export interface Question {
   ordem: number;
   repetivel: boolean;
   opcoes: string[];
+  clienteId?: string;
 }
 
 export interface Block {
@@ -38,4 +39,5 @@ export interface ClientRecord {
   skillsAtivas: Skill[];
   status: StatusImplantacao;
   criadoEm: string;
+  perguntasExtras?: Question[];
 }

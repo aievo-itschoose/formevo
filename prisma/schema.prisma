@@ -17,6 +17,7 @@ model Cliente {
   status            StatusImplantacao @default(NAO_INICIADO)
   criadoEm          DateTime          @default(now())
   respostas         Resposta[]
+  perguntas         Pergunta[]
 }
 
 enum Plano {
@@ -43,6 +44,8 @@ model Pergunta {
   id          String       @id @default(cuid())
   blocoId     String
   bloco       Bloco        @relation(fields: [blocoId], references: [id])
+  clienteId   String?
+  cliente     Cliente?     @relation(fields: [clienteId], references: [id])
   texto       String
   tipo        TipoPergunta
   obrigatoria Boolean      @default(true)

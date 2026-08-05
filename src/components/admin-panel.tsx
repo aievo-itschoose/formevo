@@ -8,7 +8,7 @@ import { CSS } from "@dnd-kit/utilities";
 import { Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { initialBlocks, initialClients, planLabels, skillLabels } from "@/lib/mock-data";
-import type { Block, ClientRecord, Plano, Skill, StatusImplantacao } from "@/types/form";
+import type { Block, ClientRecord, Plano, QuestionType, Skill, StatusImplantacao } from "@/types/form";
 
 interface AdminPanelProps {
   view: "perguntas" | "clientes" | "respostas";
@@ -75,6 +75,11 @@ export function AdminPanel({ view }: AdminPanelProps) {
   const [clientPlan, setClientPlan] = useState<Plano>("SCALE");
   const [clientSkills, setClientSkills] = useState<Skill[]>(["COMERCIAL"]);
   const [pendingDelete, setPendingDelete] = useState<{ blockId: string; questionId: string } | null>(null);
+  const [copiedClientId, setCopiedClientId] = useState<string | null>(null);
+  const [extraQuestionText, setExtraQuestionText] = useState("");
+  const [extraQuestionType, setExtraQuestionType] = useState<QuestionType>("TEXTO_CURTO");
+  const [extraQuestionRequired, setExtraQuestionRequired] = useState(true);
+  const [showExtraQuestionForm, setShowExtraQuestionForm] = useState(false);
 
   useEffect(() => {
     const storedBlocks = window.localStorage.getItem("form-evo-blocks");
@@ -150,11 +155,55 @@ export function AdminPanel({ view }: AdminPanelProps) {
       skillsAtivas: clientSkills,
       status: "NAO_INICIADO",
       criadoEm: new Date().toISOString(),
+      perguntasExtras: [],
     };
     setClients((items) => [newClient, ...items]);
     setSelectedClientId(newClient.id);
     setClientName("");
     toast.success(`Cliente criado. Link: /implantacao/${token}`);
+  };
+
+  const getClientUrl = (token: string) => {
+    const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || (typeof window !== "undefined" ? window.location.origin : "https://implantacao.evoialab.com.br");
+    return `${baseUrl.replace(/\/$/, "")}/implantacao/${token}`;
+  };
+
+  const copyClientLink = async (client: ClientRecord) => {
+    const url = getClientUrl(client.token);
+    try {
+      await navigator.clipboard.writeText(url);
+      setCopiedClientId(client.id);
+      window.setTimeout(() => setCopiedClientId(null), 1600);
+      toast.success("Link copiado com sucesso.");
+    } catch {
+      toast.error("Não foi possível copiar o link.");
+    }
+  };
+
+  const addExtraQuestion = (clienteId: string) => {
+    if (!extraQuestionText.trim()) return;
+    const newQuestion = {
+      id: `extra-${crypto.randomUUID()}`,
+      blocoId: "cliente-extra",
+      texto: extraQuestionText.trim(),
+      tipo: extraQuestionType,
+      obrigatoria: extraQuestionRequired,
+      ordem: 1,
+      repetivel: false,
+      opcoes: [],
+      clienteId,
+    };
+    setClients((items) => items.map((client) => client.id === clienteId ? { ...client, perguntasExtras: [...(client.perguntasExtras ?? []), newQuestion] } : client));
+    setExtraQuestionText("");
+    setExtraQuestionType("TEXTO_CURTO");
+    setExtraQuestionRequired(true);
+    setShowExtraQuestionForm(false);
+    toast.success("Pergunta adicional salva para este cliente.");
+  };
+
+  const removeExtraQuestion = (clientId: string, questionId: string) => {
+    setClients((items) => items.map((client) => client.id === clientId ? { ...client, perguntasExtras: (client.perguntasExtras ?? []).filter((question) => question.id !== questionId) } : client));
+    toast.success("Pergunta adicional removida.");
   };
 
   const updateClientStatus = (clientId: string, status: StatusImplantacao) => {
@@ -213,6 +262,13 @@ export function AdminPanel({ view }: AdminPanelProps) {
                 })}
               </div>
               <button type="button" onClick={createClient} className="rounded-full bg-[#7d4af9] px-4 py-2 font-medium text-white">Criar implantação</button>
+              {selectedClient && (
+                <div className="rounded-2xl border border-white/10 bg-[#0a0a0f] p-4 text-sm text-zinc-300">
+                  <p className="font-semibold text-white">Link público</p>
+                  <p className="mt-2 break-all text-zinc-400">{getClientUrl(selectedClient.token)}</p>
+                  <button type="button" onClick={() => copyClientLink(selectedClient)} className="mt-3 rounded-full border border-[#7d4af9]/30 px-3 py-2 text-sm text-[#a65df9]">{copiedClientId === selectedClient.id ? "Copiado!" : "Copiar link"}</button>
+                </div>
+              )}
             </div>
           </div>
 
@@ -220,14 +276,17 @@ export function AdminPanel({ view }: AdminPanelProps) {
             <h3 className="text-xl font-semibold text-white">Implantações</h3>
             <div className="mt-4 space-y-3">
               {clients.map((client) => (
-                <button key={client.id} type="button" onClick={() => setSelectedClientId(client.id)} className={`w-full rounded-2xl border p-4 text-left ${selectedClientId === client.id ? "border-[#7d4af9] bg-[#7d4af9]/10" : "border-white/10 bg-[#0a0a0f]"}`}>
-                  <div className="flex items-center justify-between">
-                    <span className="font-semibold text-white">{client.nome}</span>
-                    <span className="text-xs uppercase tracking-[0.25em] text-zinc-500">{client.status}</span>
-                  </div>
-                  <p className="mt-2 text-sm text-zinc-400">{client.plano} • {client.skillsAtivas.join(", ")}</p>
-                  <p className="mt-2 text-xs text-zinc-500">/implantacao/{client.token}</p>
-                </button>
+                <div key={client.id} className={`w-full rounded-2xl border p-4 text-left ${selectedClientId === client.id ? "border-[#7d4af9] bg-[#7d4af9]/10" : "border-white/10 bg-[#0a0a0f]"}`}>
+                  <button type="button" onClick={() => setSelectedClientId(client.id)} className="w-full text-left">
+                    <div className="flex items-center justify-between">
+                      <span className="font-semibold text-white">{client.nome}</span>
+                      <span className="text-xs uppercase tracking-[0.25em] text-zinc-500">{client.status}</span>
+                    </div>
+                    <p className="mt-2 text-sm text-zinc-400">{client.plano} • {client.skillsAtivas.join(", ")}</p>
+                    <p className="mt-2 break-all text-xs text-zinc-500">{getClientUrl(client.token)}</p>
+                  </button>
+                  <button type="button" onClick={() => copyClientLink(client)} className="mt-3 rounded-full border border-[#7d4af9]/30 px-3 py-2 text-sm text-[#a65df9]">{copiedClientId === client.id ? "Copiado!" : "Copiar link"}</button>
+                </div>
               ))}
             </div>
           </div>
@@ -256,9 +315,11 @@ export function AdminPanel({ view }: AdminPanelProps) {
                     <span className="text-xs uppercase tracking-[0.25em] text-zinc-500">{client.status}</span>
                   </div>
                   <p className="mt-2 text-sm text-zinc-400">Plano: {planLabels[client.plano]}</p>
-                  <div className="mt-3 flex gap-2">
+                  <p className="mt-2 break-all text-xs text-zinc-500">{getClientUrl(client.token)}</p>
+                  <div className="mt-3 flex flex-wrap gap-2">
                     <button type="button" onClick={() => updateClientStatus(client.id, "EM_ANDAMENTO")} className="rounded-full border border-white/10 px-3 py-1 text-sm text-zinc-300">Em andamento</button>
                     <button type="button" onClick={() => updateClientStatus(client.id, "CONCLUIDO")} className="rounded-full border border-[#7d4af9]/30 px-3 py-1 text-sm text-[#a65df9]">Concluir</button>
+                    <button type="button" onClick={() => copyClientLink(client)} className="rounded-full border border-[#7d4af9]/30 px-3 py-1 text-sm text-[#a65df9]">{copiedClientId === client.id ? "Copiado!" : "Copiar link"}</button>
                   </div>
                 </div>
               ))}
@@ -276,6 +337,42 @@ export function AdminPanel({ view }: AdminPanelProps) {
                 <div className="rounded-2xl border border-white/10 bg-[#0a0a0f] p-4">
                   <p className="text-white">Resposta agrupada por bloco</p>
                   <p className="mt-2">Identidade e tom • Planos e produtos • Limites e transferência para humano</p>
+                </div>
+                <div className="rounded-2xl border border-white/10 bg-[#0a0a0f] p-4">
+                  <div className="flex items-center justify-between gap-2">
+                    <p className="font-semibold text-white">Perguntas adicionais deste cliente</p>
+                    <button type="button" onClick={() => setShowExtraQuestionForm((value) => !value)} className="rounded-full border border-[#7d4af9]/30 px-3 py-1 text-sm text-[#a65df9]">{showExtraQuestionForm ? "Fechar" : "Adicionar pergunta"}</button>
+                  </div>
+                  {showExtraQuestionForm && (
+                    <div className="mt-3 space-y-2">
+                      <input value={extraQuestionText} onChange={(event) => setExtraQuestionText(event.target.value)} placeholder="Texto da pergunta" className="w-full rounded-xl border border-white/10 bg-[#111118] px-3 py-2 text-sm text-white" />
+                      <select value={extraQuestionType} onChange={(event) => setExtraQuestionType(event.target.value as QuestionType)} className="w-full rounded-xl border border-white/10 bg-[#111118] px-3 py-2 text-sm text-white">
+                        <option value="TEXTO_CURTO">Texto curto</option>
+                        <option value="TEXTO_LONGO">Texto longo</option>
+                        <option value="SELECT">Select</option>
+                        <option value="MULTISELECT">Multiselect</option>
+                        <option value="ARQUIVO">Arquivo</option>
+                        <option value="SIM_NAO">Sim/Não</option>
+                      </select>
+                      <label className="flex items-center gap-2 text-sm text-zinc-300">
+                        <input type="checkbox" checked={extraQuestionRequired} onChange={() => setExtraQuestionRequired((value) => !value)} />
+                        Obrigatória
+                      </label>
+                      <button type="button" onClick={() => addExtraQuestion(selectedClient.id)} className="rounded-full bg-[#7d4af9] px-3 py-2 text-sm font-medium text-white">Salvar pergunta</button>
+                    </div>
+                  )}
+                  <div className="mt-3 space-y-2">
+                    {(selectedClient.perguntasExtras ?? []).map((question) => (
+                      <div key={question.id} className="flex items-center justify-between rounded-xl border border-white/10 bg-[#111118] px-3 py-2 text-sm text-zinc-300">
+                        <div>
+                          <p className="text-white">{question.texto}</p>
+                          <p className="text-xs text-zinc-500">{question.tipo} • {question.obrigatoria ? "Obrigatória" : "Opcional"}</p>
+                        </div>
+                        <button type="button" onClick={() => removeExtraQuestion(selectedClient.id, question.id)} className="rounded-full border border-red-500/30 px-2 py-1 text-xs text-red-300">Excluir</button>
+                      </div>
+                    ))}
+                    {!selectedClient.perguntasExtras?.length && <p className="text-sm text-zinc-500">Nenhuma pergunta extra adicionada para este cliente.</p>}
+                  </div>
                 </div>
               </div>
             ) : (

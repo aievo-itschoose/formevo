@@ -44,7 +44,9 @@ export function PublicForm({ token }: PublicFormProps) {
   const selectedPlan = (watch("plano") as Plano) || "SCALE";
 
   useEffect(() => {
-    const foundClient = initialClients.find((item) => item.token === token) ?? null;
+    const storedClients = window.localStorage.getItem("form-evo-clients");
+    const persistedClients = storedClients ? (JSON.parse(storedClients) as ClientRecord[]) : initialClients;
+    const foundClient = persistedClients.find((item) => item.token === token) ?? initialClients.find((item) => item.token === token) ?? null;
     setCliente(foundClient);
     if (foundClient) {
       setValue("plano", foundClient.plano);
@@ -61,6 +63,30 @@ export function PublicForm({ token }: PublicFormProps) {
   }, [selectedSkills]);
 
   const planSummary = useMemo(() => planLimits[selectedPlan], [selectedPlan]);
+  const extraQuestionsBlock = useMemo(() => {
+    if (!cliente?.perguntasExtras?.length) return null;
+    return {
+      id: "cliente-extra",
+      titulo: "Perguntas adicionais",
+      ordem: 999,
+      skillVinculada: null,
+      perguntas: cliente.perguntasExtras.map((question) => ({
+        id: question.id,
+        blocoId: "cliente-extra",
+        texto: question.texto,
+        tipo: question.tipo,
+        obrigatoria: question.obrigatoria,
+        ordem: 1,
+        repetivel: false,
+        opcoes: question.opcoes ?? [],
+      })),
+    } as Block;
+  }, [cliente]);
+
+  const visibleBlocks = useMemo(() => {
+    if (!extraQuestionsBlock) return blocks;
+    return [...blocks, extraQuestionsBlock];
+  }, [blocks, extraQuestionsBlock]);
 
   const onSubmit = (data: FormValues) => {
     const parsed = schema.safeParse(data);
@@ -181,7 +207,7 @@ export function PublicForm({ token }: PublicFormProps) {
         </div>
       </div>
 
-      {blocks.map((block) => (
+      {visibleBlocks.map((block) => (
         <section key={block.id} className="rounded-2xl border border-white/10 bg-[#111118] p-6">
           <div className="mb-4 flex items-center justify-between">
             <h2 className="text-xl font-semibold text-white">{block.titulo}</h2>
