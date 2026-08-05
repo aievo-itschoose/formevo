@@ -13,6 +13,7 @@ Regras:
 - Substitua nomes de empresa, produtos, valores, regras de negócio, horários etc. pelas respostas reais do cliente.
 - Para partes técnicas de integração (nomes de tools, protocolo de retorno JSON, departamentos exatos de transferência, IDs de workflow) que não têm resposta correspondente no formulário, mantenha a estrutura do template mas marque claramente com [PREENCHER: descrição do que falta] em vez de inventar.
 - Nunca invente informações de negócio (valores, políticas, horários) que não estejam nas respostas fornecidas.
+- Quando uma pergunta tiver múltiplos valores separados por "|", cada posição representa uma instância diferente (ex: plano 1, plano 2) e está alinhada pela posição com as demais perguntas do mesmo bloco (ex: o 1º valor de "Nome do plano" corresponde ao 1º valor de "Valor"). Trate cada instância como um item separado do agente (ex: um plano/produto por vez), não como uma lista de opções únicas.
 - Devolva apenas o prompt final, sem comentários adicionais antes ou depois.`;
 
 export async function POST(_request: Request, { params }: { params: Promise<{ id: string }> }) {

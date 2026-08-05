@@ -4,7 +4,7 @@ import { prisma } from "@/lib/prisma";
 export async function POST(request: Request) {
   const body = await request.json() as {
     clienteId: string;
-    respostas: Array<{ perguntaId: string; valor: string }>;
+    respostas: Array<{ perguntaId: string; valor: string; grupoRepeticao?: number }>;
   };
 
   if (!body.clienteId || !Array.isArray(body.respostas)) {
@@ -20,6 +20,7 @@ export async function POST(request: Request) {
           clienteId: body.clienteId,
           perguntaId: resposta.perguntaId,
           valor: String(resposta.valor),
+          grupoRepeticao: resposta.grupoRepeticao ?? null,
         })),
     }),
   ]);

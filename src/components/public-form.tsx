@@ -1,10 +1,10 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { useForm } from "react-hook-form";
+import { useForm, type UseFormRegister } from "react-hook-form";
 import { toast } from "sonner";
 import { getVisibleBlocks, planLimits, skillLabels } from "@/lib/mock-data";
-import type { Block, ClientRecord, Skill } from "@/types/form";
+import type { Block, ClientRecord, Question, Skill } from "@/types/form";
 
 const NICHO_OPTIONS = {
   veicular: "Proteção veicular",
@@ -17,7 +17,51 @@ const ADMIN_ONLY_QUESTION_TEXTS = new Set([
   "Quantas instâncias de WhatsApp serão usadas, e para qual finalidade cada uma?",
 ]);
 
+const REPEAT_LABELS: Record<string, string> = {
+  "Planos e produtos": "plano",
+  "Objeções": "objeção",
+};
+
 type FormValues = Record<string, unknown>;
+
+function QuestionField({ question, fieldName, register }: { question: Question; fieldName: string; register: UseFormRegister<FormValues> }) {
+  return (
+    <label className="block space-y-2 text-sm text-zinc-300">
+      <span>{question.texto}</span>
+      {question.tipo === "TEXTO_LONGO" ? (
+        <textarea {...register(fieldName)} className="min-h-24 w-full rounded-xl border border-white/10 bg-[#0a0a0f] px-3 py-2 text-white outline-none ring-0" />
+      ) : question.tipo === "SELECT" ? (
+        <select {...register(fieldName)} className="w-full rounded-xl border border-white/10 bg-[#0a0a0f] px-3 py-2 text-white outline-none ring-0">
+          {question.opcoes.map((option) => <option key={option} value={option}>{option}</option>)}
+        </select>
+      ) : question.tipo === "MULTISELECT" ? (
+        <div className="flex flex-wrap gap-2">
+          {question.opcoes.map((option) => (
+            <label key={option} className="rounded-full border border-white/10 bg-[#0a0a0f] px-3 py-2 text-sm text-zinc-400">
+              <input type="checkbox" value={option} className="mr-2" {...register(fieldName)} />
+              {option}
+            </label>
+          ))}
+        </div>
+      ) : question.tipo === "ARQUIVO" ? (
+        <input type="file" className="w-full rounded-xl border border-dashed border-white/10 bg-[#0a0a0f] px-3 py-2 text-white" />
+      ) : question.tipo === "SIM_NAO" ? (
+        <div className="flex gap-3">
+          <label className="rounded-full border border-white/10 bg-[#0a0a0f] px-3 py-2 text-sm text-zinc-400">
+            <input type="radio" value="SIM" className="mr-2" {...register(fieldName)} />
+            Sim
+          </label>
+          <label className="rounded-full border border-white/10 bg-[#0a0a0f] px-3 py-2 text-sm text-zinc-400">
+            <input type="radio" value="NAO" className="mr-2" {...register(fieldName)} />
+            Não
+          </label>
+        </div>
+      ) : (
+        <input {...register(fieldName)} className="w-full rounded-xl border border-white/10 bg-[#0a0a0f] px-3 py-2 text-white outline-none ring-0" />
+      )}
+    </label>
+  );
+}
 
 interface PublicFormProps {
   token: string;
@@ -29,6 +73,7 @@ export function PublicForm({ token }: PublicFormProps) {
   const [allBlocks, setAllBlocks] = useState<Block[]>([]);
   const [submitted, setSubmitted] = useState(false);
   const [submitting, setSubmitting] = useState(false);
+  const [groupCounts, setGroupCounts] = useState<Record<string, number>>({});
 
   const { register, handleSubmit } = useForm<FormValues>();
 
@@ -91,17 +136,36 @@ export function PublicForm({ token }: PublicFormProps) {
     return [...filteredBlocks, extraQuestionsBlock];
   }, [blocks, extraQuestionsBlock, selectedNicho, selectedSkills]);
 
+  const addGroup = (blockId: string) => {
+    setGroupCounts((current) => ({ ...current, [blockId]: (current[blockId] ?? 1) + 1 }));
+  };
+
+  const removeLastGroup = (blockId: string) => {
+    setGroupCounts((current) => ({ ...current, [blockId]: Math.max(1, (current[blockId] ?? 1) - 1) }));
+  };
+
   const onSubmit = async (data: FormValues) => {
     if (!cliente) return;
 
-    const respostas = visibleBlocks
-      .flatMap((block) => block.perguntas)
-      .map((question) => {
-        const rawValue = data[question.id];
-        const valor = Array.isArray(rawValue) ? rawValue.join(", ") : rawValue;
-        return { perguntaId: question.id, valor: valor != null ? String(valor) : "" };
-      })
-      .filter((resposta) => resposta.valor !== "");
+    const respostas = visibleBlocks.flatMap((block) => {
+      const isRepeatable = block.perguntas.some((question) => question.repetivel);
+      if (!isRepeatable) {
+        return block.perguntas.map((question) => {
+          const rawValue = data[question.id];
+          const valor = Array.isArray(rawValue) ? rawValue.join(", ") : rawValue;
+          return { perguntaId: question.id, valor: valor != null ? String(valor) : "" };
+        });
+      }
+
+      const groupCount = groupCounts[block.id] ?? 1;
+      return Array.from({ length: groupCount }, (_, groupIndex) =>
+        block.perguntas.map((question) => {
+          const rawValue = data[`${question.id}__${groupIndex}`];
+          const valor = Array.isArray(rawValue) ? rawValue.join(", ") : rawValue;
+          return { perguntaId: question.id, valor: valor != null ? String(valor) : "", grupoRepeticao: groupIndex };
+        })
+      ).flat();
+    }).filter((resposta) => resposta.valor !== "");
 
     setSubmitting(true);
     try {
@@ -161,52 +225,45 @@ export function PublicForm({ token }: PublicFormProps) {
         </div>
       </div>
 
-      {visibleBlocks.map((block) => (
-        <section key={block.id} className="rounded-2xl border border-white/10 bg-[#111118] p-6">
-          <div className="mb-4 flex items-center justify-between">
-            <h2 className="text-xl font-semibold text-white">{block.titulo}</h2>
-            <span className="rounded-full border border-[#7d4af9]/30 bg-[#7d4af9]/10 px-3 py-1 text-xs uppercase tracking-[0.25em] text-[#a65df9]">{block.skillVinculada ?? "Sempre visível"}</span>
-          </div>
-          <div className="space-y-4">
-            {block.perguntas.map((question) => (
-              <label key={question.id} className="block space-y-2 text-sm text-zinc-300">
-                <span>{question.texto}</span>
-                {question.tipo === "TEXTO_LONGO" ? (
-                  <textarea {...register(question.id as keyof FormValues)} className="min-h-24 w-full rounded-xl border border-white/10 bg-[#0a0a0f] px-3 py-2 text-white outline-none ring-0" />
-                ) : question.tipo === "SELECT" ? (
-                  <select {...register(question.id as keyof FormValues)} className="w-full rounded-xl border border-white/10 bg-[#0a0a0f] px-3 py-2 text-white outline-none ring-0">
-                    {question.opcoes.map((option) => <option key={option} value={option}>{option}</option>)}
-                  </select>
-                ) : question.tipo === "MULTISELECT" ? (
-                  <div className="flex flex-wrap gap-2">
-                    {question.opcoes.map((option) => (
-                      <label key={option} className="rounded-full border border-white/10 bg-[#0a0a0f] px-3 py-2 text-sm text-zinc-400">
-                        <input type="checkbox" value={option} className="mr-2" {...register(question.id as keyof FormValues)} />
-                        {option}
-                      </label>
-                    ))}
-                  </div>
-                ) : question.tipo === "ARQUIVO" ? (
-                  <input type="file" className="w-full rounded-xl border border-dashed border-white/10 bg-[#0a0a0f] px-3 py-2 text-white" />
-                ) : question.tipo === "SIM_NAO" ? (
-                  <div className="flex gap-3">
-                    <label className="rounded-full border border-white/10 bg-[#0a0a0f] px-3 py-2 text-sm text-zinc-400">
-                      <input type="radio" value="SIM" className="mr-2" {...register(question.id as keyof FormValues)} />
-                      Sim
-                    </label>
-                    <label className="rounded-full border border-white/10 bg-[#0a0a0f] px-3 py-2 text-sm text-zinc-400">
-                      <input type="radio" value="NAO" className="mr-2" {...register(question.id as keyof FormValues)} />
-                      Não
-                    </label>
-                  </div>
-                ) : (
-                  <input {...register(question.id as keyof FormValues)} className="w-full rounded-xl border border-white/10 bg-[#0a0a0f] px-3 py-2 text-white outline-none ring-0" />
-                )}
-              </label>
-            ))}
-          </div>
-        </section>
-      ))}
+      {visibleBlocks.map((block) => {
+        const isRepeatable = block.perguntas.some((question) => question.repetivel);
+        const groupCount = isRepeatable ? (groupCounts[block.id] ?? 1) : 1;
+        const itemLabel = REPEAT_LABELS[block.titulo] ?? "item";
+
+        return (
+          <section key={block.id} className="rounded-2xl border border-white/10 bg-[#111118] p-6">
+            <div className="mb-4 flex items-center justify-between">
+              <h2 className="text-xl font-semibold text-white">{block.titulo}</h2>
+              <span className="rounded-full border border-[#7d4af9]/30 bg-[#7d4af9]/10 px-3 py-1 text-xs uppercase tracking-[0.25em] text-[#a65df9]">{block.skillVinculada ?? "Sempre visível"}</span>
+            </div>
+            <div className="space-y-6">
+              {Array.from({ length: groupCount }, (_, groupIndex) => (
+                <div key={groupIndex} className={isRepeatable ? "space-y-4 rounded-xl border border-white/10 bg-[#0a0a0f]/40 p-4" : "space-y-4"}>
+                  {isRepeatable && (
+                    <div className="flex items-center justify-between">
+                      <p className="text-sm font-semibold text-[#a65df9]">{itemLabel.charAt(0).toUpperCase() + itemLabel.slice(1)} {groupIndex + 1}</p>
+                      {groupIndex === groupCount - 1 && groupCount > 1 && (
+                        <button type="button" onClick={() => removeLastGroup(block.id)} className="text-xs text-red-300 hover:underline">Remover</button>
+                      )}
+                    </div>
+                  )}
+                  {block.perguntas.map((question) => (
+                    <QuestionField
+                      key={question.id}
+                      question={question}
+                      fieldName={isRepeatable ? `${question.id}__${groupIndex}` : question.id}
+                      register={register}
+                    />
+                  ))}
+                </div>
+              ))}
+              {isRepeatable && (
+                <button type="button" onClick={() => addGroup(block.id)} className="rounded-full border border-[#7d4af9]/30 px-3 py-2 text-sm text-[#a65df9]">+ Adicionar outro {itemLabel}</button>
+              )}
+            </div>
+          </section>
+        );
+      })}
 
       <div className="flex items-center justify-between rounded-2xl border border-white/10 bg-[#111118] p-4">
         <p className="text-sm text-zinc-400">{submitted ? "Seu envio foi registrado e ficará disponível no painel admin." : "Suas respostas ficam salvas e disponíveis no painel admin."}</p>

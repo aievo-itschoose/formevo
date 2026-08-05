@@ -14,7 +14,10 @@ export async function getClientAnswersSummary(clienteId: string) {
     },
   });
 
-  const respostas = await prisma.resposta.findMany({ where: { clienteId } });
+  const respostas = await prisma.resposta.findMany({
+    where: { clienteId },
+    orderBy: [{ grupoRepeticao: "asc" }, { criadoEm: "asc" }],
+  });
   const respostasPorPergunta = new Map<string, string[]>();
   for (const resposta of respostas) {
     const valores = respostasPorPergunta.get(resposta.perguntaId) ?? [];
