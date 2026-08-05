@@ -1,16 +1,19 @@
 import type { Metadata } from "next";
-import { Geist, Geist_Mono } from "next/font/google";
+import localFont from "next/font/local";
 import { Toaster } from "sonner";
 import "./globals.css";
 
-const geistSans = Geist({
-  variable: "--font-geist-sans",
-  subsets: ["latin"],
-});
-
-const geistMono = Geist_Mono({
-  variable: "--font-geist-mono",
-  subsets: ["latin"],
+const goldplay = localFont({
+  variable: "--font-goldplay",
+  src: [
+    { path: "./fonts/Goldplay-Thin.ttf", weight: "100", style: "normal" },
+    { path: "./fonts/Goldplay-Light.ttf", weight: "300", style: "normal" },
+    { path: "./fonts/Goldplay-Regular.ttf", weight: "400", style: "normal" },
+    { path: "./fonts/Goldplay-Medium.ttf", weight: "500", style: "normal" },
+    { path: "./fonts/Goldplay-SemiBold.ttf", weight: "600", style: "normal" },
+    { path: "./fonts/Goldplay-Bold.ttf", weight: "700", style: "normal" },
+    { path: "./fonts/Goldplay-Black.ttf", weight: "900", style: "normal" },
+  ],
 });
 
 export const metadata: Metadata = {
@@ -20,7 +23,7 @@ export const metadata: Metadata = {
 
 export default function RootLayout({ children }: LayoutProps<"/">) {
   return (
-    <html lang="pt-BR" className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}>
+    <html lang="pt-BR" className={`${goldplay.variable} h-full antialiased`}>
       <body className="min-h-full bg-[#0a0a0f] text-white">
         {children}
         <Toaster richColors position="top-right" />

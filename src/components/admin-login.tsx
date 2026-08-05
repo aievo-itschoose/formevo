@@ -22,7 +22,8 @@ export function AdminLogin() {
   return (
     <form onSubmit={handleSubmit} className="mx-auto flex w-full max-w-md flex-col gap-4 rounded-3xl border border-white/10 bg-[#111118] p-8 shadow-2xl shadow-black/30">
       <div>
-        <p className="text-sm uppercase tracking-[0.3em] text-[#a65df9]">Admin Evo</p>
+        <img src="/evo_ia_roxo.png" alt="Evo" className="h-8 w-auto" />
+        <p className="mt-3 text-sm uppercase tracking-[0.3em] text-[#a65df9]">Admin Evo</p>
         <h1 className="mt-2 text-3xl font-semibold text-white">Acesso ao painel</h1>
         <p className="mt-2 text-sm text-zinc-400">Use a senha única para entrar.</p>
       </div>

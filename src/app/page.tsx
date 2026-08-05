@@ -5,7 +5,8 @@ export default function HomePage() {
     <main className="min-h-screen bg-[radial-gradient(circle_at_top,_rgba(125,74,249,0.18),_transparent_30%)] px-6 py-16 text-white">
       <div className="mx-auto flex max-w-5xl flex-col gap-10">
         <section className="rounded-[2rem] border border-white/10 bg-[#111118]/90 p-8 shadow-2xl shadow-black/30">
-          <p className="text-sm uppercase tracking-[0.35em] text-[#a65df9]">Formulário Evo</p>
+          <img src="/evo_ia_roxo.png" alt="Evo" className="h-9 w-auto" />
+          <p className="mt-4 text-sm uppercase tracking-[0.35em] text-[#a65df9]">Formulário Evo</p>
           <h1 className="mt-4 text-4xl font-semibold sm:text-5xl">Implantação, configuração e acompanhamento em um só fluxo.</h1>
           <p className="mt-4 max-w-2xl text-lg text-zinc-400">Use este projeto para coletar dados operacionais do cliente, montar o agente e acompanhar o status da implantação via painel interno.</p>
           <div className="mt-8 flex flex-wrap gap-3">

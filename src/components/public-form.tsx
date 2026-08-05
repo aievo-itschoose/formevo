@@ -4,7 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useForm } from "react-hook-form";
 import { z } from "zod";
 import { toast } from "sonner";
-import { getVisibleBlocks, initialBlocks, initialClients, planLimits, skillLabels } from "@/lib/mock-data";
+import { getVisibleBlocks, planLimits, skillLabels } from "@/lib/mock-data";
 import type { Block, ClientRecord, Plano, Skill } from "@/types/form";
 
 const NICHO_OPTIONS = {
@@ -30,8 +30,11 @@ interface PublicFormProps {
 
 export function PublicForm({ token }: PublicFormProps) {
   const [cliente, setCliente] = useState<ClientRecord | null>(null);
+  const [loadingCliente, setLoadingCliente] = useState(true);
+  const [allBlocks, setAllBlocks] = useState<Block[]>([]);
   const [blocks, setBlocks] = useState<Block[]>([]);
   const [submitted, setSubmitted] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
 
   const { register, handleSubmit, setValue, watch } = useForm<FormValues>({
     defaultValues: {
@@ -50,23 +53,29 @@ export function PublicForm({ token }: PublicFormProps) {
   const selectedNicho = cliente?.nicho ?? "veicular";
 
   useEffect(() => {
-    const storedClients = window.localStorage.getItem("form-evo-clients");
-    const persistedClients = storedClients ? (JSON.parse(storedClients) as ClientRecord[]) : initialClients;
-    const foundClient = persistedClients.find((item) => item.token === token) ?? initialClients.find((item) => item.token === token) ?? null;
-    setCliente(foundClient);
-    if (foundClient) {
-      setValue("plano", foundClient.plano);
-      setValue("skillsAtivas", foundClient.skillsAtivas);
-    }
+    setLoadingCliente(true);
+    fetch(`/api/clientes/token/${token}`)
+      .then((response) => {
+        if (!response.ok) throw new Error("Cliente não encontrado");
+        return response.json() as Promise<ClientRecord>;
+      })
+      .then((foundClient) => {
+        setCliente(foundClient);
+        setValue("plano", foundClient.plano);
+        setValue("skillsAtivas", foundClient.skillsAtivas);
+      })
+      .catch(() => setCliente(null))
+      .finally(() => setLoadingCliente(false));
 
-    const visibleBlocks = getVisibleBlocks(initialBlocks, foundClient?.skillsAtivas ?? ["COMERCIAL"]);
-    setBlocks(visibleBlocks);
+    fetch("/api/blocos")
+      .then((response) => response.json())
+      .then((data: Block[]) => setAllBlocks(data))
+      .catch(() => toast.error("Não foi possível carregar as perguntas do formulário."));
   }, [token, setValue]);
 
   useEffect(() => {
-    const visibleBlocks = getVisibleBlocks(initialBlocks, selectedSkills as Skill[]);
-    setBlocks(visibleBlocks);
-  }, [selectedSkills]);
+    setBlocks(getVisibleBlocks(allBlocks, selectedSkills as Skill[]));
+  }, [allBlocks, selectedSkills]);
 
   const planSummary = useMemo(() => planLimits[selectedPlan], [selectedPlan]);
   const extraQuestionsBlock = useMemo(() => {
@@ -103,25 +112,44 @@ export function PublicForm({ token }: PublicFormProps) {
     return [...filteredBlocks, extraQuestionsBlock];
   }, [blocks, extraQuestionsBlock, selectedNicho, selectedSkills]);
 
-  const onSubmit = (data: FormValues) => {
+  const onSubmit = async (data: FormValues) => {
+    if (!cliente) return;
+
     const parsed = schema.safeParse(data);
     if (!parsed.success) {
       toast.error("Revise os campos obrigatórios antes de enviar.");
       return;
     }
 
-    const payload = {
-      token,
-      cliente: cliente?.nome ?? "Cliente",
-      submittedAt: new Date().toISOString(),
-      ...data,
-    };
+    const respostas = visibleBlocks
+      .flatMap((block) => block.perguntas)
+      .map((question) => {
+        const rawValue = data[question.id];
+        const valor = Array.isArray(rawValue) ? rawValue.join(", ") : rawValue;
+        return { perguntaId: question.id, valor: valor != null ? String(valor) : "" };
+      })
+      .filter((resposta) => resposta.valor !== "");
 
-    const existingDrafts = JSON.parse(localStorage.getItem("form-evo-drafts") ?? "[]") as Array<Record<string, unknown>>;
-    localStorage.setItem("form-evo-drafts", JSON.stringify([...existingDrafts, payload]));
-    setSubmitted(true);
-    toast.success("Respostas salvas com sucesso.");
+    setSubmitting(true);
+    try {
+      const response = await fetch("/api/respostas", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ clienteId: cliente.id, respostas }),
+      });
+      if (!response.ok) throw new Error("Falha ao enviar");
+      setSubmitted(true);
+      toast.success("Respostas salvas com sucesso.");
+    } catch {
+      toast.error("Não foi possível salvar as respostas. Tente novamente.");
+    } finally {
+      setSubmitting(false);
+    }
   };
+
+  if (loadingCliente) {
+    return <div className="rounded-2xl border border-white/10 bg-[#111118] p-6 text-sm text-zinc-400">Carregando...</div>;
+  }
 
   if (!cliente) {
     return <div className="rounded-2xl border border-red-400/30 bg-red-500/10 p-6 text-sm text-red-200">Token inválido ou não encontrado.</div>;
@@ -132,7 +160,8 @@ export function PublicForm({ token }: PublicFormProps) {
       <div className="rounded-2xl border border-white/10 bg-[#111118] p-6 shadow-2xl shadow-black/30">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div>
-            <p className="text-sm uppercase tracking-[0.3em] text-[#a65df9]">Implantação Evo</p>
+            <img src="/evo_ia_roxo.png" alt="Evo" className="h-8 w-auto" />
+            <p className="mt-3 text-sm uppercase tracking-[0.3em] text-[#a65df9]">Implantação Evo</p>
             <h1 className="text-3xl font-semibold text-white">Configuração inicial do agente</h1>
             <p className="mt-2 text-sm text-zinc-400">Olá, {cliente.nome}. Complete as informações abaixo para preparar a implantação.</p>
           </div>
@@ -271,8 +300,8 @@ export function PublicForm({ token }: PublicFormProps) {
       ))}
 
       <div className="flex items-center justify-between rounded-2xl border border-white/10 bg-[#111118] p-4">
-        <p className="text-sm text-zinc-400">{submitted ? "Seu envio foi registrado e ficará disponível no painel admin." : "As respostas ficam salvas localmente para simular o fluxo completo da implantação."}</p>
-        <button type="submit" className="rounded-full bg-[#7d4af9] px-4 py-2 font-medium text-white transition hover:bg-[#a65df9]">Enviar respostas</button>
+        <p className="text-sm text-zinc-400">{submitted ? "Seu envio foi registrado e ficará disponível no painel admin." : "Suas respostas ficam salvas e disponíveis no painel admin."}</p>
+        <button type="submit" disabled={submitting} className="rounded-full bg-[#7d4af9] px-4 py-2 font-medium text-white transition hover:bg-[#a65df9] disabled:opacity-50">{submitting ? "Enviando..." : "Enviar respostas"}</button>
       </div>
     </form>
   );

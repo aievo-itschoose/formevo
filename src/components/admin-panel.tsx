@@ -2,16 +2,24 @@
 
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { DndContext, PointerSensor, closestCenter, useSensor, useSensors, type DragEndEvent } from "@dnd-kit/core";
 import { SortableContext, arrayMove, useSortable, verticalListSortingStrategy } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 import { Trash2 } from "lucide-react";
 import { toast } from "sonner";
-import { initialBlocks, initialClients, planLabels, skillLabels } from "@/lib/mock-data";
+import { initialBlocks, planLabels, skillLabels } from "@/lib/mock-data";
 import type { Block, ClientRecord, Plano, QuestionType, Skill, StatusImplantacao } from "@/types/form";
 
 interface AdminPanelProps {
   view: "perguntas" | "clientes" | "respostas";
+}
+
+interface AnswersSummary {
+  blocos: Array<{
+    titulo: string;
+    perguntas: Array<{ texto: string; tipo: string; obrigatoria: boolean; valores: string[] }>;
+  }>;
 }
 
 function SortableBlockCard({ block, onEditQuestion, onAddQuestion, onDeleteQuestion }: { block: Block; onEditQuestion: (blockId: string, questionId: string, field: "texto" | "tipo", value: string) => void; onAddQuestion: (blockId: string) => void; onDeleteQuestion: (blockId: string, questionId: string) => void }) {
@@ -68,6 +76,8 @@ function SortableBlockCard({ block, onEditQuestion, onAddQuestion, onDeleteQuest
 }
 
 export function AdminPanel({ view }: AdminPanelProps) {
+  const router = useRouter();
+  const [loaded, setLoaded] = useState(false);
   const [blocks, setBlocks] = useState<Block[]>([]);
   const [clients, setClients] = useState<ClientRecord[]>([]);
   const [selectedClientId, setSelectedClientId] = useState<string | null>(null);
@@ -76,29 +86,51 @@ export function AdminPanel({ view }: AdminPanelProps) {
   const [clientSkills, setClientSkills] = useState<Skill[]>(["COMERCIAL"]);
   const [clientNicho, setClientNicho] = useState<ClientRecord["nicho"]>("veicular");
   const [pendingDelete, setPendingDelete] = useState<{ blockId: string; questionId: string } | null>(null);
+  const [pendingDeleteClientId, setPendingDeleteClientId] = useState<string | null>(null);
   const [copiedClientId, setCopiedClientId] = useState<string | null>(null);
   const [extraQuestionText, setExtraQuestionText] = useState("");
   const [extraQuestionType, setExtraQuestionType] = useState<QuestionType>("TEXTO_CURTO");
   const [extraQuestionRequired, setExtraQuestionRequired] = useState(true);
   const [showExtraQuestionForm, setShowExtraQuestionForm] = useState(false);
+  const [answersSummary, setAnswersSummary] = useState<AnswersSummary | null>(null);
+  const [loadingAnswers, setLoadingAnswers] = useState(false);
+  const [generatedPrompt, setGeneratedPrompt] = useState<string | null>(null);
+  const [generatingPrompt, setGeneratingPrompt] = useState(false);
+  const [copiedPrompt, setCopiedPrompt] = useState(false);
 
   useEffect(() => {
     const storedBlocks = window.localStorage.getItem("form-evo-blocks");
-    const storedClients = window.localStorage.getItem("form-evo-clients");
     const nextBlocks = storedBlocks ? JSON.parse(storedBlocks) as Block[] : initialBlocks;
-    const nextClients = storedClients ? JSON.parse(storedClients) as ClientRecord[] : initialClients;
     setBlocks(nextBlocks);
-    setClients(nextClients);
-    setSelectedClientId(nextClients[0]?.id ?? null);
+    setLoaded(true);
+
+    fetch("/api/clientes")
+      .then((response) => response.json())
+      .then((data: ClientRecord[]) => {
+        setClients(data);
+        setSelectedClientId(data[0]?.id ?? null);
+      })
+      .catch(() => toast.error("Não foi possível carregar os clientes."));
   }, []);
 
   useEffect(() => {
-    if (blocks.length) window.localStorage.setItem("form-evo-blocks", JSON.stringify(blocks));
-  }, [blocks]);
+    if (loaded) window.localStorage.setItem("form-evo-blocks", JSON.stringify(blocks));
+  }, [loaded, blocks]);
 
   useEffect(() => {
-    if (clients.length) window.localStorage.setItem("form-evo-clients", JSON.stringify(clients));
-  }, [clients]);
+    if (view !== "respostas" || !selectedClientId) {
+      setAnswersSummary(null);
+      return;
+    }
+
+    setLoadingAnswers(true);
+    setGeneratedPrompt(null);
+    fetch(`/api/clientes/${selectedClientId}/respostas`)
+      .then((response) => response.json())
+      .then((data: AnswersSummary) => setAnswersSummary(data))
+      .catch(() => toast.error("Não foi possível carregar as respostas deste cliente."))
+      .finally(() => setLoadingAnswers(false));
+  }, [view, selectedClientId]);
 
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 8 } }));
 
@@ -144,25 +176,51 @@ export function AdminPanel({ view }: AdminPanelProps) {
     }
   };
 
-  const createClient = () => {
+  const createClient = async () => {
     if (!clientName.trim()) return;
-    const token = `${clientName.toLowerCase().replace(/[^a-z0-9]+/g, "-")}-${Date.now().toString().slice(-4)}`;
-    const newClient: ClientRecord = {
-      id: `cliente-${Date.now()}`,
-      nome: clientName.trim(),
-      token,
-      plano: clientPlan,
-      temIntegracao: false,
-      skillsAtivas: clientSkills,
-      nicho: clientNicho,
-      status: "NAO_INICIADO",
-      criadoEm: new Date().toISOString(),
-      perguntasExtras: [],
-    };
-    setClients((items) => [newClient, ...items]);
-    setSelectedClientId(newClient.id);
-    setClientName("");
-    toast.success(`Cliente criado. Link: /implantacao/${token}`);
+
+    try {
+      const response = await fetch("/api/clientes", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ nome: clientName.trim(), plano: clientPlan, skillsAtivas: clientSkills, nicho: clientNicho }),
+      });
+      if (!response.ok) throw new Error("Falha ao criar cliente");
+
+      const newClient = await response.json() as ClientRecord;
+      setClients((items) => [newClient, ...items]);
+      setSelectedClientId(newClient.id);
+      setClientName("");
+      toast.success(`Cliente criado. Link: /implantacao/${newClient.token}`);
+    } catch {
+      toast.error("Não foi possível criar o cliente.");
+    }
+  };
+
+  const deleteClient = (clientId: string) => {
+    setPendingDeleteClientId(clientId);
+  };
+
+  const confirmDeleteClient = async () => {
+    if (!pendingDeleteClientId) return;
+
+    try {
+      const response = await fetch(`/api/clientes/${pendingDeleteClientId}`, { method: "DELETE" });
+      if (!response.ok) throw new Error("Falha ao excluir");
+
+      setClients((items) => items.filter((client) => client.id !== pendingDeleteClientId));
+      setSelectedClientId((current) => (current === pendingDeleteClientId ? null : current));
+      toast.success("Cliente removido.");
+    } catch {
+      toast.error("Não foi possível remover o cliente.");
+    } finally {
+      setPendingDeleteClientId(null);
+    }
+  };
+
+  const logout = () => {
+    document.cookie = "evo-admin-auth=; path=/; max-age=0";
+    router.push("/admin");
   };
 
   const getClientUrl = (token: string) => {
@@ -182,34 +240,82 @@ export function AdminPanel({ view }: AdminPanelProps) {
     }
   };
 
-  const addExtraQuestion = (clienteId: string) => {
+  const addExtraQuestion = async (clienteId: string) => {
     if (!extraQuestionText.trim()) return;
-    const newQuestion = {
-      id: `extra-${crypto.randomUUID()}`,
-      blocoId: "cliente-extra",
-      texto: extraQuestionText.trim(),
-      tipo: extraQuestionType,
-      obrigatoria: extraQuestionRequired,
-      ordem: 1,
-      repetivel: false,
-      opcoes: [],
-      clienteId,
-    };
-    setClients((items) => items.map((client) => client.id === clienteId ? { ...client, perguntasExtras: [...(client.perguntasExtras ?? []), newQuestion] } : client));
-    setExtraQuestionText("");
-    setExtraQuestionType("TEXTO_CURTO");
-    setExtraQuestionRequired(true);
-    setShowExtraQuestionForm(false);
-    toast.success("Pergunta adicional salva para este cliente.");
+
+    try {
+      const response = await fetch(`/api/clientes/${clienteId}/perguntas-extras`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ texto: extraQuestionText.trim(), tipo: extraQuestionType, obrigatoria: extraQuestionRequired }),
+      });
+      if (!response.ok) throw new Error("Falha ao salvar");
+
+      const newQuestion = await response.json();
+      setClients((items) => items.map((client) => client.id === clienteId ? { ...client, perguntasExtras: [...(client.perguntasExtras ?? []), newQuestion] } : client));
+      setExtraQuestionText("");
+      setExtraQuestionType("TEXTO_CURTO");
+      setExtraQuestionRequired(true);
+      setShowExtraQuestionForm(false);
+      toast.success("Pergunta adicional salva para este cliente.");
+    } catch {
+      toast.error("Não foi possível salvar a pergunta adicional.");
+    }
   };
 
-  const removeExtraQuestion = (clientId: string, questionId: string) => {
-    setClients((items) => items.map((client) => client.id === clientId ? { ...client, perguntasExtras: (client.perguntasExtras ?? []).filter((question) => question.id !== questionId) } : client));
-    toast.success("Pergunta adicional removida.");
+  const removeExtraQuestion = async (clientId: string, questionId: string) => {
+    try {
+      const response = await fetch(`/api/perguntas-extras/${questionId}`, { method: "DELETE" });
+      if (!response.ok) throw new Error("Falha ao remover");
+
+      setClients((items) => items.map((client) => client.id === clientId ? { ...client, perguntasExtras: (client.perguntasExtras ?? []).filter((question) => question.id !== questionId) } : client));
+      toast.success("Pergunta adicional removida.");
+    } catch {
+      toast.error("Não foi possível remover a pergunta adicional.");
+    }
   };
 
-  const updateClientStatus = (clientId: string, status: StatusImplantacao) => {
-    setClients((items) => items.map((client) => client.id === clientId ? { ...client, status } : client));
+  const updateClientStatus = async (clientId: string, status: StatusImplantacao) => {
+    try {
+      const response = await fetch(`/api/clientes/${clientId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ status }),
+      });
+      if (!response.ok) throw new Error("Falha ao atualizar");
+
+      setClients((items) => items.map((client) => client.id === clientId ? { ...client, status } : client));
+    } catch {
+      toast.error("Não foi possível atualizar o status.");
+    }
+  };
+
+  const generatePrompt = async (clientId: string) => {
+    setGeneratingPrompt(true);
+    setGeneratedPrompt(null);
+    try {
+      const response = await fetch(`/api/clientes/${clientId}/gerar-prompt`, { method: "POST" });
+      if (!response.ok) throw new Error("Falha ao gerar prompt");
+
+      const data = await response.json() as { prompt: string };
+      setGeneratedPrompt(data.prompt);
+      toast.success("Prompt gerado.");
+    } catch {
+      toast.error("Não foi possível gerar o prompt.");
+    } finally {
+      setGeneratingPrompt(false);
+    }
+  };
+
+  const copyGeneratedPrompt = async () => {
+    if (!generatedPrompt) return;
+    try {
+      await navigator.clipboard.writeText(generatedPrompt);
+      setCopiedPrompt(true);
+      window.setTimeout(() => setCopiedPrompt(false), 1600);
+    } catch {
+      toast.error("Não foi possível copiar o prompt.");
+    }
   };
 
   const selectedClient = useMemo(() => clients.find((client) => client.id === selectedClientId) ?? null, [clients, selectedClientId]);
@@ -219,6 +325,7 @@ export function AdminPanel({ view }: AdminPanelProps) {
       <div className="rounded-2xl border border-white/10 bg-[#111118] p-6">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div>
+            <img src="/evo_ia_roxo.png" alt="Evo" className="mb-3 h-8 w-auto" />
             <h2 className="text-2xl font-semibold text-white">Painel de implantação</h2>
             <p className="mt-2 text-sm text-zinc-400">Gerencie perguntas, organize blocos e crie links únicos para cada cliente.</p>
           </div>
@@ -226,6 +333,7 @@ export function AdminPanel({ view }: AdminPanelProps) {
             <Link href="/admin/perguntas" className="rounded-full border border-white/10 px-3 py-2 text-sm text-zinc-300">Perguntas</Link>
             <Link href="/admin/clientes" className="rounded-full border border-white/10 px-3 py-2 text-sm text-zinc-300">Clientes</Link>
             <Link href="/admin/respostas" className="rounded-full border border-[#7d4af9]/30 bg-[#7d4af9]/10 px-3 py-2 text-sm text-[#a65df9]">Respostas</Link>
+            <button type="button" onClick={logout} className="rounded-full border border-red-500/30 px-3 py-2 text-sm text-red-300 transition hover:bg-red-500/10">Sair</button>
           </div>
         </div>
       </div>
@@ -291,7 +399,12 @@ export function AdminPanel({ view }: AdminPanelProps) {
                     <p className="mt-2 text-sm text-zinc-400">{client.plano} • {client.skillsAtivas.join(", ")}</p>
                     <p className="mt-2 break-all text-xs text-zinc-500">{getClientUrl(client.token)}</p>
                   </button>
-                  <button type="button" onClick={() => copyClientLink(client)} className="mt-3 rounded-full border border-[#7d4af9]/30 px-3 py-2 text-sm text-[#a65df9]">{copiedClientId === client.id ? "Copiado!" : "Copiar link"}</button>
+                  <div className="mt-3 flex items-center gap-2">
+                    <button type="button" onClick={() => copyClientLink(client)} className="rounded-full border border-[#7d4af9]/30 px-3 py-2 text-sm text-[#a65df9]">{copiedClientId === client.id ? "Copiado!" : "Copiar link"}</button>
+                    <button type="button" onClick={() => deleteClient(client.id)} className="rounded-full border border-red-500/30 p-2 text-red-300 transition hover:bg-red-500/10" aria-label="Excluir cliente">
+                      <Trash2 size={14} />
+                    </button>
+                  </div>
                 </div>
               ))}
             </div>
@@ -309,17 +422,29 @@ export function AdminPanel({ view }: AdminPanelProps) {
         </div>
       )}
 
+      {pendingDeleteClientId && (
+        <div className="rounded-2xl border border-red-500/30 bg-red-500/10 p-4 text-sm text-red-200">
+          <p className="font-medium">Tem certeza que deseja excluir este cliente? O link de implantação dele deixará de funcionar.</p>
+          <div className="mt-3 flex gap-2">
+            <button type="button" onClick={confirmDeleteClient} className="rounded-full bg-red-500 px-3 py-2 text-white">Excluir</button>
+            <button type="button" onClick={() => setPendingDeleteClientId(null)} className="rounded-full border border-white/10 px-3 py-2 text-zinc-300">Cancelar</button>
+          </div>
+        </div>
+      )}
+
       {view === "respostas" && (
         <div className="grid gap-6 lg:grid-cols-[0.9fr_1.1fr]">
           <div className="rounded-2xl border border-white/10 bg-[#111118] p-6">
             <h3 className="text-xl font-semibold text-white">Resumo das implantações</h3>
             <div className="mt-4 space-y-3">
               {clients.map((client) => (
-                <div key={client.id} className="rounded-2xl border border-white/10 bg-[#0a0a0f] p-4">
-                  <div className="flex items-center justify-between">
-                    <span className="font-semibold text-white">{client.nome}</span>
-                    <span className="text-xs uppercase tracking-[0.25em] text-zinc-500">{client.status}</span>
-                  </div>
+                <div key={client.id} className={`rounded-2xl border p-4 ${selectedClientId === client.id ? "border-[#7d4af9] bg-[#7d4af9]/10" : "border-white/10 bg-[#0a0a0f]"}`}>
+                  <button type="button" onClick={() => setSelectedClientId(client.id)} className="w-full text-left">
+                    <div className="flex items-center justify-between">
+                      <span className="font-semibold text-white">{client.nome}</span>
+                      <span className="text-xs uppercase tracking-[0.25em] text-zinc-500">{client.status}</span>
+                    </div>
+                  </button>
                   <p className="mt-2 text-sm text-zinc-400">Plano: {planLabels[client.plano]}</p>
                   <p className="mt-2 break-all text-xs text-zinc-500">{getClientUrl(client.token)}</p>
                   <div className="mt-3 flex flex-wrap gap-2">
@@ -340,10 +465,47 @@ export function AdminPanel({ view }: AdminPanelProps) {
                 <p><span className="font-semibold text-white">Token:</span> {selectedClient.token}</p>
                 <p><span className="font-semibold text-white">Plano:</span> {planLabels[selectedClient.plano]}</p>
                 <p><span className="font-semibold text-white">Skills:</span> {selectedClient.skillsAtivas.join(", ")}</p>
+
                 <div className="rounded-2xl border border-white/10 bg-[#0a0a0f] p-4">
-                  <p className="text-white">Resposta agrupada por bloco</p>
-                  <p className="mt-2">Identidade e tom • Planos e produtos • Limites e transferência para humano</p>
+                  <p className="font-semibold text-white">Respostas por bloco</p>
+                  {loadingAnswers && <p className="mt-2 text-sm text-zinc-500">Carregando respostas...</p>}
+                  {!loadingAnswers && answersSummary && !answersSummary.blocos.length && (
+                    <p className="mt-2 text-sm text-zinc-500">Este cliente ainda não respondeu o formulário.</p>
+                  )}
+                  {!loadingAnswers && answersSummary && answersSummary.blocos.length > 0 && (
+                    <div className="mt-3 space-y-4">
+                      {answersSummary.blocos.map((bloco) => (
+                        <div key={bloco.titulo}>
+                          <p className="text-sm font-semibold text-[#a65df9]">{bloco.titulo}</p>
+                          <div className="mt-2 space-y-2">
+                            {bloco.perguntas.map((pergunta) => (
+                              <div key={pergunta.texto} className="rounded-xl border border-white/10 bg-[#111118] p-3">
+                                <p className="text-xs text-zinc-500">{pergunta.texto}</p>
+                                <p className="mt-1 text-sm text-white">{pergunta.valores.length ? pergunta.valores.join(", ") : "—"}</p>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
                 </div>
+
+                <div className="rounded-2xl border border-white/10 bg-[#0a0a0f] p-4">
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <p className="font-semibold text-white">Prompt do agente</p>
+                    <button type="button" onClick={() => generatePrompt(selectedClient.id)} disabled={generatingPrompt} className="rounded-full bg-[#7d4af9] px-3 py-1 text-sm font-medium text-white disabled:opacity-50">
+                      {generatingPrompt ? "Gerando..." : "Gerar prompt"}
+                    </button>
+                  </div>
+                  {generatedPrompt && (
+                    <div className="mt-3 space-y-2">
+                      <textarea readOnly value={generatedPrompt} className="h-64 w-full rounded-xl border border-white/10 bg-[#111118] px-3 py-2 text-xs text-zinc-300" />
+                      <button type="button" onClick={copyGeneratedPrompt} className="rounded-full border border-[#7d4af9]/30 px-3 py-2 text-sm text-[#a65df9]">{copiedPrompt ? "Copiado!" : "Copiar prompt"}</button>
+                    </div>
+                  )}
+                </div>
+
                 <div className="rounded-2xl border border-white/10 bg-[#0a0a0f] p-4">
                   <div className="flex items-center justify-between gap-2">
                     <p className="font-semibold text-white">Perguntas adicionais deste cliente</p>
