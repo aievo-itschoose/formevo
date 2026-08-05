@@ -2,27 +2,22 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { useForm } from "react-hook-form";
-import { z } from "zod";
 import { toast } from "sonner";
 import { getVisibleBlocks, planLimits, skillLabels } from "@/lib/mock-data";
-import type { Block, ClientRecord, Plano, Skill } from "@/types/form";
+import type { Block, ClientRecord, Skill } from "@/types/form";
 
 const NICHO_OPTIONS = {
   veicular: "Proteção veicular",
   outro: "Outro",
 } as const;
 
-const schema = z.object({
-  nomeAssociacao: z.string().min(1, "Informe o nome da associação"),
-  responsavel: z.string().min(1, "Informe o responsável"),
-  whatsapp: z.string().min(1, "Informe o WhatsApp"),
-  email: z.string().email("Informe um e-mail válido"),
-  plano: z.enum(["FLOW", "SCALE", "TEAM"]),
-  skillsAtivas: z.array(z.string()).min(1, "Selecione ao menos uma skill"),
-  instanciasWhatsapp: z.string().min(1, "Informe quantas instâncias serão usadas"),
-});
+const ADMIN_ONLY_QUESTION_TEXTS = new Set([
+  "Plano contratado",
+  "Quais Skills vocês querem ativar no agente?",
+  "Quantas instâncias de WhatsApp serão usadas, e para qual finalidade cada uma?",
+]);
 
-type FormValues = z.infer<typeof schema> & Record<string, unknown>;
+type FormValues = Record<string, unknown>;
 
 interface PublicFormProps {
   token: string;
@@ -32,24 +27,13 @@ export function PublicForm({ token }: PublicFormProps) {
   const [cliente, setCliente] = useState<ClientRecord | null>(null);
   const [loadingCliente, setLoadingCliente] = useState(true);
   const [allBlocks, setAllBlocks] = useState<Block[]>([]);
-  const [blocks, setBlocks] = useState<Block[]>([]);
   const [submitted, setSubmitted] = useState(false);
   const [submitting, setSubmitting] = useState(false);
 
-  const { register, handleSubmit, setValue, watch } = useForm<FormValues>({
-    defaultValues: {
-      nomeAssociacao: "",
-      responsavel: "",
-      whatsapp: "",
-      email: "",
-      plano: "SCALE",
-      skillsAtivas: ["COMERCIAL"],
-      instanciasWhatsapp: "",
-    } as FormValues,
-  });
+  const { register, handleSubmit } = useForm<FormValues>();
 
-  const selectedSkills = (watch("skillsAtivas") as Skill[]) || [];
-  const selectedPlan = (watch("plano") as Plano) || "SCALE";
+  const selectedSkills = useMemo(() => cliente?.skillsAtivas ?? [], [cliente]);
+  const selectedPlan = cliente?.plano ?? "SCALE";
   const selectedNicho = cliente?.nicho ?? "veicular";
 
   useEffect(() => {
@@ -59,11 +43,7 @@ export function PublicForm({ token }: PublicFormProps) {
         if (!response.ok) throw new Error("Cliente não encontrado");
         return response.json() as Promise<ClientRecord>;
       })
-      .then((foundClient) => {
-        setCliente(foundClient);
-        setValue("plano", foundClient.plano);
-        setValue("skillsAtivas", foundClient.skillsAtivas);
-      })
+      .then((foundClient) => setCliente(foundClient))
       .catch(() => setCliente(null))
       .finally(() => setLoadingCliente(false));
 
@@ -71,11 +51,9 @@ export function PublicForm({ token }: PublicFormProps) {
       .then((response) => response.json())
       .then((data: Block[]) => setAllBlocks(data))
       .catch(() => toast.error("Não foi possível carregar as perguntas do formulário."));
-  }, [token, setValue]);
+  }, [token]);
 
-  useEffect(() => {
-    setBlocks(getVisibleBlocks(allBlocks, selectedSkills as Skill[]));
-  }, [allBlocks, selectedSkills]);
+  const blocks = useMemo(() => getVisibleBlocks(allBlocks, selectedSkills as Skill[]), [allBlocks, selectedSkills]);
 
   const planSummary = useMemo(() => planLimits[selectedPlan], [selectedPlan]);
   const extraQuestionsBlock = useMemo(() => {
@@ -102,6 +80,7 @@ export function PublicForm({ token }: PublicFormProps) {
     const filteredBlocks = blocks.map((block) => ({
       ...block,
       perguntas: block.perguntas.filter((question) => {
+        if (ADMIN_ONLY_QUESTION_TEXTS.has(question.texto)) return false;
         const matchesNicho = !question.nichoVinculado || question.nichoVinculado === selectedNicho;
         const matchesSkill = !block.skillVinculada || selectedSkills.includes(block.skillVinculada as Skill);
         return matchesNicho && matchesSkill;
@@ -114,12 +93,6 @@ export function PublicForm({ token }: PublicFormProps) {
 
   const onSubmit = async (data: FormValues) => {
     if (!cliente) return;
-
-    const parsed = schema.safeParse(data);
-    if (!parsed.success) {
-      toast.error("Revise os campos obrigatórios antes de enviar.");
-      return;
-    }
 
     const respostas = visibleBlocks
       .flatMap((block) => block.perguntas)
@@ -185,70 +158,6 @@ export function PublicForm({ token }: PublicFormProps) {
         <div className="rounded-2xl border border-white/10 bg-[#111118] p-4">
           <p className="text-sm text-zinc-400">Skills selecionadas</p>
           <p className="mt-2 text-sm font-semibold text-white">{selectedSkills.length ? selectedSkills.map((skill) => skillLabels[skill as Skill]).join(" • ") : "Nenhuma"}</p>
-        </div>
-      </div>
-
-      <div className="rounded-2xl border border-white/10 bg-[#111118] p-6">
-        <div className="grid gap-4 md:grid-cols-2">
-          <label className="space-y-2 text-sm text-zinc-300">
-            <span>Nome da associação</span>
-            <input {...register("nomeAssociacao")} className="w-full rounded-xl border border-white/10 bg-[#0a0a0f] px-3 py-2 text-white outline-none ring-0" />
-          </label>
-          <label className="space-y-2 text-sm text-zinc-300">
-            <span>Responsável pelo projeto</span>
-            <input {...register("responsavel")} className="w-full rounded-xl border border-white/10 bg-[#0a0a0f] px-3 py-2 text-white outline-none ring-0" />
-          </label>
-          <label className="space-y-2 text-sm text-zinc-300">
-            <span>WhatsApp</span>
-            <input {...register("whatsapp")} className="w-full rounded-xl border border-white/10 bg-[#0a0a0f] px-3 py-2 text-white outline-none ring-0" />
-          </label>
-          <label className="space-y-2 text-sm text-zinc-300">
-            <span>E-mail</span>
-            <input type="email" {...register("email")} className="w-full rounded-xl border border-white/10 bg-[#0a0a0f] px-3 py-2 text-white outline-none ring-0" />
-          </label>
-          <label className="space-y-2 text-sm text-zinc-300">
-            <span>Plano contratado</span>
-            <select {...register("plano")} className="w-full rounded-xl border border-white/10 bg-[#0a0a0f] px-3 py-2 text-white outline-none ring-0">
-              <option value="FLOW">Flow</option>
-              <option value="SCALE">Scale</option>
-              <option value="TEAM">Team</option>
-            </select>
-          </label>
-          <label className="space-y-2 text-sm text-zinc-300">
-            <span>Instâncias de WhatsApp</span>
-            <input {...register("instanciasWhatsapp")} className="w-full rounded-xl border border-white/10 bg-[#0a0a0f] px-3 py-2 text-white outline-none ring-0" />
-          </label>
-        </div>
-
-        <div className="mt-4 space-y-3">
-          <p className="text-sm font-medium text-white">Skills a ativar</p>
-          <div className="flex flex-wrap gap-2">
-            {Object.entries(skillLabels).map(([value, label]) => {
-              const skillValue = value as Skill;
-              const checked = (selectedSkills as Skill[]).includes(skillValue);
-              return (
-                <label key={value} className={`rounded-full border px-3 py-2 text-sm ${checked ? "border-[#7d4af9] bg-[#7d4af9]/20 text-white" : "border-white/10 bg-[#0a0a0f] text-zinc-400"}`}>
-                  <input
-                    type="checkbox"
-                    value={skillValue}
-                    className="mr-2"
-                    checked={checked}
-                    onChange={(event) => {
-                      const current = [...(selectedSkills as Skill[])];
-                      if (event.target.checked) {
-                        current.push(skillValue);
-                      } else {
-                        const index = current.indexOf(skillValue);
-                        if (index > -1) current.splice(index, 1);
-                      }
-                      setValue("skillsAtivas", current);
-                    }}
-                  />
-                  {label}
-                </label>
-              );
-            })}
-          </div>
         </div>
       </div>
 

@@ -116,7 +116,7 @@ export const initialBlocks: Block[] = [
       { id: "adesao-diagnostico-outro", blocoId: "adesao", texto: "Existe avaliação ou diagnóstico presencial obrigatório antes do orçamento? Como funciona?", tipo: "TEXTO_LONGO", obrigatoria: true, ordem: 2, repetivel: false, opcoes: [], nichoVinculado: "outro" },
       { id: "adesao-tempo-fechamento", blocoId: "adesao", texto: "Tempo do fechamento até conclusão/entrega", tipo: "TEXTO_CURTO", obrigatoria: true, ordem: 3, repetivel: false, opcoes: [] },
       { id: "adesao-atendimento-presencial", blocoId: "adesao", texto: "Existe atendimento presencial? Endereço da loja/escritório, se houver", tipo: "TEXTO_LONGO", obrigatoria: false, ordem: 4, repetivel: false, opcoes: [] },
-      { id: "adesao-logistica", blocoId: "adesao", texto: "Oferece logística de busca/entrega do produto ou equipamento?", tipo: "TEXTO_LONGO", obrigatoria: false, ordem: 5, repetivel: false, opcoes: [] },
+      { id: "adesao-logistica", blocoId: "adesao", texto: "Oferece logística de busca/entrega do produto ou equipamento?", tipo: "TEXTO_LONGO", obrigatoria: false, ordem: 5, repetivel: false, opcoes: [], nichoVinculado: "outro" },
     ],
   },
   {
