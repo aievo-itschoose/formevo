@@ -18,6 +18,7 @@ export interface Question {
   ordem: number;
   repetivel: boolean;
   opcoes: string[];
+  nichoVinculado?: string | null;
   clienteId?: string;
 }
 
@@ -37,6 +38,7 @@ export interface ClientRecord {
   temIntegracao: boolean;
   sistemaIntegracao?: string;
   skillsAtivas: Skill[];
+  nicho: "veicular" | "outro";
   status: StatusImplantacao;
   criadoEm: string;
   perguntasExtras?: Question[];

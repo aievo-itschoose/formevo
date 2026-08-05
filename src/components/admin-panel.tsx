@@ -74,6 +74,7 @@ export function AdminPanel({ view }: AdminPanelProps) {
   const [clientName, setClientName] = useState("");
   const [clientPlan, setClientPlan] = useState<Plano>("SCALE");
   const [clientSkills, setClientSkills] = useState<Skill[]>(["COMERCIAL"]);
+  const [clientNicho, setClientNicho] = useState<ClientRecord["nicho"]>("veicular");
   const [pendingDelete, setPendingDelete] = useState<{ blockId: string; questionId: string } | null>(null);
   const [copiedClientId, setCopiedClientId] = useState<string | null>(null);
   const [extraQuestionText, setExtraQuestionText] = useState("");
@@ -153,6 +154,7 @@ export function AdminPanel({ view }: AdminPanelProps) {
       plano: clientPlan,
       temIntegracao: false,
       skillsAtivas: clientSkills,
+      nicho: clientNicho,
       status: "NAO_INICIADO",
       criadoEm: new Date().toISOString(),
       perguntasExtras: [],
@@ -248,6 +250,10 @@ export function AdminPanel({ view }: AdminPanelProps) {
                 <option value="FLOW">Flow</option>
                 <option value="SCALE">Scale</option>
                 <option value="TEAM">Team</option>
+              </select>
+              <select value={clientNicho} onChange={(event) => setClientNicho(event.target.value as ClientRecord["nicho"])} className="w-full rounded-xl border border-white/10 bg-[#0a0a0f] px-3 py-2 text-white">
+                <option value="veicular">Proteção veicular</option>
+                <option value="outro">Outro</option>
               </select>
               <div className="flex flex-wrap gap-2">
                 {Object.entries(skillLabels).map(([value, label]) => {

@@ -20,6 +20,7 @@ type QuestionSeed = {
   ordem: number;
   repetivel: boolean;
   opcoes: string[];
+  nichoVinculado?: string | null;
 };
 
 type BlockSeed = {
@@ -35,7 +36,7 @@ const blocks: BlockSeed[] = [
     ordem: 1,
     skillVinculada: null,
     perguntas: [
-      { texto: "Nome da associação", tipo: "TEXTO_CURTO", obrigatoria: true, ordem: 1, repetivel: false, opcoes: [] },
+      { texto: "Nome da associação/empresa", tipo: "TEXTO_CURTO", obrigatoria: true, ordem: 1, repetivel: false, opcoes: [] },
       { texto: "Responsável pelo projeto - nome", tipo: "TEXTO_CURTO", obrigatoria: true, ordem: 2, repetivel: false, opcoes: [] },
       { texto: "WhatsApp do responsável", tipo: "TEXTO_CURTO", obrigatoria: true, ordem: 3, repetivel: false, opcoes: [] },
       { texto: "E-mail do responsável", tipo: "TEXTO_CURTO", obrigatoria: true, ordem: 4, repetivel: false, opcoes: [] },
@@ -43,8 +44,9 @@ const blocks: BlockSeed[] = [
       { texto: "Vocês têm integração com algum sistema?", tipo: "SIM_NAO", obrigatoria: true, ordem: 6, repetivel: false, opcoes: [] },
       { texto: "Qual sistema de integração?", tipo: "SELECT", obrigatoria: false, ordem: 7, repetivel: false, opcoes: ["Power", "SGA", "Siprov", "Outro"] },
       { texto: "Nome completo de quem recebe o primeiro acesso admin", tipo: "TEXTO_CURTO", obrigatoria: true, ordem: 8, repetivel: false, opcoes: [] },
-      { texto: "Quais Skills vocês querem ativar no agente?", tipo: "MULTISELECT", obrigatoria: true, ordem: 9, repetivel: false, opcoes: ["Comercial/SDR", "Cobrança", "SAC", "Reativação de base", "Indicação"] },
-      { texto: "Quantas instâncias de WhatsApp serão usadas, e para qual finalidade cada uma?", tipo: "TEXTO_LONGO", obrigatoria: true, ordem: 10, repetivel: false, opcoes: [] },
+      { texto: "Nicho de atuação", tipo: "SELECT", obrigatoria: true, ordem: 9, repetivel: false, opcoes: ["Proteção veicular", "Outro"] },
+      { texto: "Quais Skills vocês querem ativar no agente?", tipo: "MULTISELECT", obrigatoria: true, ordem: 10, repetivel: false, opcoes: ["Comercial/SDR", "Cobrança", "SAC", "Reativação de base", "Indicação"] },
+      { texto: "Quantas instâncias de WhatsApp serão usadas, e para qual finalidade cada uma?", tipo: "TEXTO_LONGO", obrigatoria: true, ordem: 11, repetivel: false, opcoes: [] },
     ],
   },
   {
@@ -53,8 +55,8 @@ const blocks: BlockSeed[] = [
     skillVinculada: null,
     perguntas: [
       { texto: "Como o agente deve se apresentar?", tipo: "TEXTO_LONGO", obrigatoria: true, ordem: 1, repetivel: false, opcoes: [] },
-      { texto: "Em três palavras, como a associação quer ser percebida na conversa?", tipo: "TEXTO_CURTO", obrigatoria: true, ordem: 2, repetivel: false, opcoes: [] },
-      { texto: "Expressões, gírias ou forma de falar característica da associação", tipo: "TEXTO_LONGO", obrigatoria: false, ordem: 3, repetivel: false, opcoes: [] },
+      { texto: "Em três palavras, como a empresa quer ser percebida na conversa?", tipo: "TEXTO_CURTO", obrigatoria: true, ordem: 2, repetivel: false, opcoes: [] },
+      { texto: "Expressões, gírias ou forma de falar característica da empresa", tipo: "TEXTO_LONGO", obrigatoria: false, ordem: 3, repetivel: false, opcoes: [] },
       { texto: "Formas de falar que devem ser evitadas", tipo: "TEXTO_LONGO", obrigatoria: false, ordem: 4, repetivel: false, opcoes: [] },
       { texto: "Qual nome o agente deve usar?", tipo: "TEXTO_CURTO", obrigatoria: true, ordem: 5, repetivel: false, opcoes: [] },
       { texto: "Preferências de formatação: limite de linhas por mensagem, se pode usar listas com hífen, nível de uso de emoji (nenhum/moderado/frequente)", tipo: "TEXTO_LONGO", obrigatoria: true, ordem: 6, repetivel: false, opcoes: [] },
@@ -65,14 +67,16 @@ const blocks: BlockSeed[] = [
     ordem: 3,
     skillVinculada: "COMERCIAL",
     perguntas: [
-      { texto: "Nome do plano", tipo: "TEXTO_CURTO", obrigatoria: true, ordem: 1, repetivel: true, opcoes: [] },
-      { texto: "Categoria de veículo elegível e faixa de ano/valor", tipo: "TEXTO_LONGO", obrigatoria: true, ordem: 2, repetivel: true, opcoes: [] },
-      { texto: "Valor da mensalidade", tipo: "TEXTO_CURTO", obrigatoria: true, ordem: 3, repetivel: true, opcoes: [] },
+      { texto: "Nome do plano/produto/serviço", tipo: "TEXTO_CURTO", obrigatoria: true, ordem: 1, repetivel: true, opcoes: [] },
+      { texto: "Categoria de veículo elegível e faixa de ano/valor", tipo: "TEXTO_LONGO", obrigatoria: true, ordem: 2, repetivel: true, opcoes: [], nichoVinculado: "veicular" },
+      { texto: "Categoria/tipo do produto ou serviço, e perfil de cliente elegível", tipo: "TEXTO_LONGO", obrigatoria: true, ordem: 2, repetivel: true, opcoes: [], nichoVinculado: "outro" },
+      { texto: "Valor", tipo: "TEXTO_CURTO", obrigatoria: true, ordem: 3, repetivel: true, opcoes: [] },
       { texto: "O que está incluso", tipo: "TEXTO_LONGO", obrigatoria: true, ordem: 4, repetivel: true, opcoes: [] },
       { texto: "O que NÃO está incluso", tipo: "TEXTO_LONGO", obrigatoria: true, ordem: 5, repetivel: true, opcoes: [] },
-      { texto: "Carência - tempo e situações", tipo: "TEXTO_LONGO", obrigatoria: false, ordem: 6, repetivel: true, opcoes: [] },
-      { texto: "Taxas adicionais - adesão, vistoria", tipo: "TEXTO_LONGO", obrigatoria: false, ordem: 7, repetivel: true, opcoes: [] },
-      { texto: "Diferencial forte desse plano", tipo: "TEXTO_LONGO", obrigatoria: false, ordem: 8, repetivel: true, opcoes: [] },
+      { texto: "Carência - tempo e situações, se houver", tipo: "TEXTO_LONGO", obrigatoria: false, ordem: 6, repetivel: true, opcoes: [] },
+      { texto: "Taxas adicionais", tipo: "TEXTO_LONGO", obrigatoria: false, ordem: 7, repetivel: true, opcoes: [] },
+      { texto: "Diferencial forte desse plano/produto", tipo: "TEXTO_LONGO", obrigatoria: false, ordem: 8, repetivel: true, opcoes: [] },
+      { texto: "Prazo de garantia oferecido, se houver", tipo: "TEXTO_CURTO", obrigatoria: false, ordem: 9, repetivel: true, opcoes: [] },
     ],
   },
   {
@@ -101,8 +105,8 @@ const blocks: BlockSeed[] = [
     skillVinculada: "COMERCIAL",
     perguntas: [
       { texto: "Principais concorrentes diretos", tipo: "TEXTO_LONGO", obrigatoria: true, ordem: 1, repetivel: false, opcoes: [] },
-      { texto: "Resposta padrão vs. seguro tradicional", tipo: "TEXTO_LONGO", obrigatoria: false, ordem: 2, repetivel: false, opcoes: [] },
-      { texto: "Resposta padrão vs. outra associação", tipo: "TEXTO_LONGO", obrigatoria: false, ordem: 3, repetivel: false, opcoes: [] },
+      { texto: "Resposta padrão vs. seguro tradicional", tipo: "TEXTO_LONGO", obrigatoria: false, ordem: 2, repetivel: false, opcoes: [], nichoVinculado: "veicular" },
+      { texto: "Resposta padrão a comparações com concorrentes diretos", tipo: "TEXTO_LONGO", obrigatoria: false, ordem: 3, repetivel: false, opcoes: [] },
     ],
   },
   {
@@ -111,8 +115,11 @@ const blocks: BlockSeed[] = [
     skillVinculada: "COMERCIAL",
     perguntas: [
       { texto: "Documentos exigidos", tipo: "TEXTO_LONGO", obrigatoria: true, ordem: 1, repetivel: false, opcoes: [] },
-      { texto: "Vistoria obrigatória? Como funciona", tipo: "TEXTO_LONGO", obrigatoria: true, ordem: 2, repetivel: false, opcoes: [] },
-      { texto: "Tempo do fechamento até proteção ativa", tipo: "TEXTO_CURTO", obrigatoria: true, ordem: 3, repetivel: false, opcoes: [] },
+      { texto: "Vistoria obrigatória? Como funciona", tipo: "TEXTO_LONGO", obrigatoria: true, ordem: 2, repetivel: false, opcoes: [], nichoVinculado: "veicular" },
+      { texto: "Existe avaliação ou diagnóstico presencial obrigatório antes do orçamento? Como funciona?", tipo: "TEXTO_LONGO", obrigatoria: true, ordem: 2, repetivel: false, opcoes: [], nichoVinculado: "outro" },
+      { texto: "Tempo do fechamento até conclusão/entrega", tipo: "TEXTO_CURTO", obrigatoria: true, ordem: 3, repetivel: false, opcoes: [] },
+      { texto: "Existe atendimento presencial? Endereço da loja/escritório, se houver", tipo: "TEXTO_LONGO", obrigatoria: false, ordem: 4, repetivel: false, opcoes: [] },
+      { texto: "Oferece logística de busca/entrega do produto ou equipamento?", tipo: "TEXTO_LONGO", obrigatoria: false, ordem: 5, repetivel: false, opcoes: [] },
     ],
   },
   {
@@ -125,6 +132,7 @@ const blocks: BlockSeed[] = [
       { texto: "O que o agente jamais pode prometer", tipo: "TEXTO_LONGO", obrigatoria: true, ordem: 3, repetivel: false, opcoes: [] },
       { texto: "Departamentos de transferência: nome do departamento e quando transferir pra ele", tipo: "TEXTO_LONGO", obrigatoria: true, ordem: 4, repetivel: true, opcoes: [] },
       { texto: "Existe canal de emergência/24h que o agente informa diretamente, sem transferir? Qual número/contato e quais situações se aplicam?", tipo: "TEXTO_LONGO", obrigatoria: false, ordem: 5, repetivel: false, opcoes: [] },
+      { texto: "Existe alguma informação que o agente NUNCA deve pedir ao cliente? (ex: nota fiscal, CPF)", tipo: "TEXTO_LONGO", obrigatoria: false, ordem: 6, repetivel: false, opcoes: [] },
     ],
   },
   {
@@ -135,6 +143,7 @@ const blocks: BlockSeed[] = [
       { texto: "Upload de script/manual/apostila existente", tipo: "ARQUIVO", obrigatoria: false, ordem: 1, repetivel: false, opcoes: [] },
       { texto: "Upload de FAQ", tipo: "ARQUIVO", obrigatoria: false, ordem: 2, repetivel: false, opcoes: [] },
       { texto: "Upload/print de conversa modelo", tipo: "ARQUIVO", obrigatoria: false, ordem: 3, repetivel: false, opcoes: [] },
+      { texto: "Links de prova social (avaliações Google, posts, redes sociais) que o agente pode usar", tipo: "TEXTO_LONGO", obrigatoria: false, ordem: 4, repetivel: false, opcoes: [] },
     ],
   },
   {
@@ -143,9 +152,10 @@ const blocks: BlockSeed[] = [
     skillVinculada: null,
     perguntas: [
       { texto: "Horário de atendimento humano, detalhado por dia da semana", tipo: "TEXTO_LONGO", obrigatoria: true, ordem: 1, repetivel: false, opcoes: [] },
-      { texto: "Quais formas de pagamento existem, e existe alguma que o agente NUNCA deve mencionar mesmo se o cliente perguntar diretamente?", tipo: "TEXTO_LONGO", obrigatoria: true, ordem: 2, repetivel: false, opcoes: [] },
-      { texto: "Existe protocolo ou texto formal fixo para pedidos de cancelamento? Cole o texto exato, se houver", tipo: "TEXTO_LONGO", obrigatoria: false, ordem: 3, repetivel: false, opcoes: [] },
-      { texto: "Existe mensagem-gatilho fixa (campanha, anúncio, botão) que deve acionar um fluxo específico? Qual mensagem e qual fluxo?", tipo: "TEXTO_LONGO", obrigatoria: false, ordem: 4, repetivel: false, opcoes: [] },
+      { texto: "Feriados ou datas específicas de fechamento, além do horário semanal padrão", tipo: "TEXTO_LONGO", obrigatoria: false, ordem: 2, repetivel: false, opcoes: [] },
+      { texto: "Quais formas de pagamento existem, e existe alguma que o agente NUNCA deve mencionar mesmo se o cliente perguntar diretamente?", tipo: "TEXTO_LONGO", obrigatoria: true, ordem: 3, repetivel: false, opcoes: [] },
+      { texto: "Existe protocolo ou texto formal fixo para pedidos de cancelamento? Cole o texto exato, se houver", tipo: "TEXTO_LONGO", obrigatoria: false, ordem: 4, repetivel: false, opcoes: [] },
+      { texto: "Existe mensagem-gatilho fixa (campanha, anúncio, botão) que deve acionar um fluxo específico? Qual mensagem e qual fluxo?", tipo: "TEXTO_LONGO", obrigatoria: false, ordem: 5, repetivel: false, opcoes: [] },
     ],
   },
   {
@@ -266,6 +276,7 @@ async function upsertQuestion(blockId: string, questionData: QuestionSeed) {
     ordem: questionData.ordem,
     repetivel: questionData.repetivel,
     opcoes: questionData.opcoes,
+    nichoVinculado: questionData.nichoVinculado ?? null,
   };
 
   if (existingQuestion) {
@@ -289,7 +300,8 @@ async function main() {
   const expectedQuestionTexts = new Set(blocks.flatMap((block) => block.perguntas.map((question) => question.texto)));
   await removeStaleBlocksAndQuestions(expectedQuestionTexts);
 
-  const insertedCounts: Record<string, number> = {};
+  const countsByBlock: Record<string, number> = {};
+  const countsByNicho: Record<string, number> = { veicular: 0, outro: 0, geral: 0 };
 
   for (const blockData of blocks) {
     const bloco = await upsertBlock(blockData);
@@ -298,9 +310,12 @@ async function main() {
     for (const question of blockData.perguntas) {
       await upsertQuestion(bloco.id, question);
       count += 1;
+      if (question.nichoVinculado === "veicular") countsByNicho.veicular += 1;
+      else if (question.nichoVinculado === "outro") countsByNicho.outro += 1;
+      else countsByNicho.geral += 1;
     }
 
-    insertedCounts[blockData.titulo] = count;
+    countsByBlock[blockData.titulo] = count;
     console.log(`Seeded bloco: ${bloco.titulo} (${count} perguntas)`);
   }
 
@@ -308,10 +323,14 @@ async function main() {
   const clientesRestantes = await prisma.cliente.count({ where: { OR: [{ nome: { in: sampleClientNames } }, { token: { in: sampleClientTokens } }] } });
 
   console.log("\nResumo do seed:");
-  for (const [titulo, count] of Object.entries(insertedCounts)) {
+  for (const [titulo, count] of Object.entries(countsByBlock)) {
     console.log(`- ${titulo}: ${count} perguntas`);
   }
 
+  console.log("\nPerguntas por nicho:");
+  console.log(`- veicular: ${countsByNicho.veicular}`);
+  console.log(`- outro: ${countsByNicho.outro}`);
+  console.log(`- geral: ${countsByNicho.geral}`);
   console.log(`\nTotal de perguntas no banco: ${totalPerguntas}`);
   console.log(`Clientes de teste removidos: ${clientesRestantes}`);
 }

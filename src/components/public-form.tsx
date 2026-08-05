@@ -7,6 +7,11 @@ import { toast } from "sonner";
 import { getVisibleBlocks, initialBlocks, initialClients, planLimits, skillLabels } from "@/lib/mock-data";
 import type { Block, ClientRecord, Plano, Skill } from "@/types/form";
 
+const NICHO_OPTIONS = {
+  veicular: "Proteção veicular",
+  outro: "Outro",
+} as const;
+
 const schema = z.object({
   nomeAssociacao: z.string().min(1, "Informe o nome da associação"),
   responsavel: z.string().min(1, "Informe o responsável"),
@@ -42,6 +47,7 @@ export function PublicForm({ token }: PublicFormProps) {
 
   const selectedSkills = (watch("skillsAtivas") as Skill[]) || [];
   const selectedPlan = (watch("plano") as Plano) || "SCALE";
+  const selectedNicho = cliente?.nicho ?? "veicular";
 
   useEffect(() => {
     const storedClients = window.localStorage.getItem("form-evo-clients");
@@ -84,9 +90,18 @@ export function PublicForm({ token }: PublicFormProps) {
   }, [cliente]);
 
   const visibleBlocks = useMemo(() => {
-    if (!extraQuestionsBlock) return blocks;
-    return [...blocks, extraQuestionsBlock];
-  }, [blocks, extraQuestionsBlock]);
+    const filteredBlocks = blocks.map((block) => ({
+      ...block,
+      perguntas: block.perguntas.filter((question) => {
+        const matchesNicho = !question.nichoVinculado || question.nichoVinculado === selectedNicho;
+        const matchesSkill = !block.skillVinculada || selectedSkills.includes(block.skillVinculada as Skill);
+        return matchesNicho && matchesSkill;
+      }),
+    })).filter((block) => block.perguntas.length > 0);
+
+    if (!extraQuestionsBlock) return filteredBlocks;
+    return [...filteredBlocks, extraQuestionsBlock];
+  }, [blocks, extraQuestionsBlock, selectedNicho, selectedSkills]);
 
   const onSubmit = (data: FormValues) => {
     const parsed = schema.safeParse(data);
@@ -123,6 +138,7 @@ export function PublicForm({ token }: PublicFormProps) {
           </div>
           <div className="rounded-2xl border border-[#7d4af9]/30 bg-[#0a0a0f] p-4 text-sm text-zinc-300">
             <div>Plano: <span className="font-semibold text-white">{cliente.plano}</span></div>
+            <div>Nicho: <span className="font-semibold text-white">{NICHO_OPTIONS[cliente.nicho]}</span></div>
             <div>Skills: <span className="font-semibold text-white">{cliente.skillsAtivas.join(", ")}</span></div>
           </div>
         </div>
